@@ -53,26 +53,26 @@ function PageViewer({ page, onEdit, onHistory, canEdit }) {
 
   return (
     <div className="wiki-article">
-      <div className="wiki-toolbar">
-         <div className="wiki-breadcrumbs">
-           Pages / <span style={{color: '#111827', fontWeight: 500}}>{title}</span>
-         </div>
-         <div className="wiki-actions">
-            <button className="btn btn-secondary" onClick={onHistory}>History</button>
-            {canEdit && (
-              <button className="btn btn-primary" onClick={onEdit}>Edit Page</button>
-            )}
-         </div>
-      </div>
-
       <div className="wiki-content-area">
-        <h1>{title}</h1>
-        <div style={{color: '#6b7280', fontSize: '0.9rem', marginBottom: '2rem'}}>
-          <span style={{backgroundColor: '#e5e7eb', color: '#374151', padding: '0.1rem 0.4rem', borderRadius: '4px', marginRight: '0.5rem', fontSize: '0.8rem', fontWeight: 600}}>
+        <div className="wiki-header">
+           <h1 className="wiki-header-title">{title}</h1>
+           <div className="wiki-header-actions">
+              <button className="btn btn-minimal" onClick={onHistory} title="View History">
+                 <span style={{fontSize: '1.2rem', marginRight: '0.25rem'}}>↺</span> History
+              </button>
+              {canEdit && (
+                <button className="btn btn-sm btn-primary" onClick={onEdit}>Edit Page</button>
+              )}
+           </div>
+        </div>
+
+        <div style={{color: '#6b7280', fontSize: '0.85rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+          <span style={{backgroundColor: '#e5e7eb', color: '#374151', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 600, fontSize: '0.75rem'}}>
             v{currentRevision.version}
           </span>
-          Last updated by {currentRevision.authorId} on {new Date(currentRevision.timestamp).toLocaleString()}
+          <span>Updated {new Date(currentRevision.timestamp).toLocaleDateString()} by {currentRevision.authorId}</span>
         </div>
+
         <div className="wiki-body">
           {parseMarkdown(currentRevision.content)}
         </div>
@@ -88,17 +88,22 @@ function PageEditor({ page, initialTitle, initialContent, onSave, onCancel }) {
 
   return (
     <div className="wiki-editor-container">
-      <div className="wiki-toolbar">
-         <div className="wiki-breadcrumbs">
-           {page ? `Editing ${page.title}` : 'Creating New Page'}
-         </div>
-         <div className="wiki-actions">
-            <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-            <button className="btn btn-primary" onClick={() => onSave(title, content)}>Save Changes</button>
-         </div>
-      </div>
-
       <div className="wiki-content-area" style={{display: 'flex', flexDirection: 'column', height: '100%'}}>
+
+        <div className="wiki-header">
+           {/* If creating a new page, title is editable, otherwise static header */}
+           {!page ? (
+             <h1 className="wiki-header-title">New Page</h1>
+           ) : (
+             <h1 className="wiki-header-title">Editing {page.title}</h1>
+           )}
+
+           <div className="wiki-header-actions">
+              <button className="btn btn-sm btn-secondary" onClick={onCancel}>Cancel</button>
+              <button className="btn btn-sm btn-primary" onClick={() => onSave(title, content)}>Save Changes</button>
+           </div>
+        </div>
+
         <div className="wiki-editor-meta">
           <input
             type="text"
@@ -119,7 +124,8 @@ function PageEditor({ page, initialTitle, initialContent, onSave, onCancel }) {
               background: 'none',
               borderBottom: activeTab === 'write' ? '2px solid #2563eb' : '2px solid transparent',
               fontWeight: activeTab === 'write' ? 600 : 400,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontSize: '0.9rem'
             }}
           >
             Write
@@ -132,7 +138,8 @@ function PageEditor({ page, initialTitle, initialContent, onSave, onCancel }) {
               background: 'none',
               borderBottom: activeTab === 'preview' ? '2px solid #2563eb' : '2px solid transparent',
               fontWeight: activeTab === 'preview' ? 600 : 400,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontSize: '0.9rem'
             }}
           >
             Preview
@@ -218,17 +225,13 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
 
   return (
      <div className="wiki-article">
-      <div className="wiki-toolbar">
-         <div className="wiki-breadcrumbs">
-           <span style={{cursor: 'pointer'}} onClick={onBack}>Pages / {page.title}</span> / History
-         </div>
-         <div className="wiki-actions">
-            <button className="btn btn-secondary" onClick={onBack}>Back to Page</button>
-         </div>
-      </div>
-
       <div className="wiki-content-area">
-        <h1>Revision History: {page.title}</h1>
+        <div className="wiki-header">
+           <h1 className="wiki-header-title">History: {page.title}</h1>
+           <div className="wiki-header-actions">
+             <button className="btn btn-sm btn-secondary" onClick={onBack}>Back to Page</button>
+           </div>
+        </div>
 
         <ul className="wiki-history-list">
           {revisions.map((rev, index) => {
