@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from './db';
 import './Wiki.css';
 
@@ -81,6 +81,7 @@ function PageViewer({ page, onEdit, onHistory, canEdit }) {
 function PageEditor({ page, initialTitle, initialContent, onSave, onCancel }) {
   const [title, setTitle] = useState(initialTitle || '');
   const [content, setContent] = useState(initialContent || '');
+  const [activeTab, setActiveTab] = useState('write'); // 'write' or 'preview'
 
   return (
     <div className="wiki-editor-container">
@@ -105,20 +106,104 @@ function PageEditor({ page, initialTitle, initialContent, onSave, onCancel }) {
             disabled={!!page}
           />
         </div>
-        <textarea
-          className="wiki-editor-input"
-          placeholder="Write your content here... (Supports Markdown: #, *, -)"
-          value={content}
-          onChange={e => setContent(e.target.value)}
-        />
+
+        <div style={{borderBottom: '1px solid #e5e7eb', marginBottom: '1rem', display: 'flex', gap: '1rem'}}>
+          <button
+            onClick={() => setActiveTab('write')}
+            style={{
+              padding: '0.5rem 1rem',
+              border: 'none',
+              background: 'none',
+              borderBottom: activeTab === 'write' ? '2px solid #2563eb' : '2px solid transparent',
+              fontWeight: activeTab === 'write' ? 600 : 400,
+              cursor: 'pointer'
+            }}
+          >
+            Write
+          </button>
+          <button
+            onClick={() => setActiveTab('preview')}
+            style={{
+              padding: '0.5rem 1rem',
+              border: 'none',
+              background: 'none',
+              borderBottom: activeTab === 'preview' ? '2px solid #2563eb' : '2px solid transparent',
+              fontWeight: activeTab === 'preview' ? 600 : 400,
+              cursor: 'pointer'
+            }}
+          >
+            Preview
+          </button>
+        </div>
+
+        {activeTab === 'write' ? (
+          <textarea
+            className="wiki-editor-input"
+            placeholder="Write your content here... (Supports Markdown: #, *, -)"
+            value={content}
+            onChange={e => setContent(e.target.value)}
+          />
+        ) : (
+          <div className="wiki-article" style={{flex: 1, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1rem'}}>
+             {parseMarkdown(content)}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
+// --- Simple Diff Utility ---
+const computeDiff = (oldText, newText) => {
+  if (!oldText) oldText = "";
+  if (!newText) newText = "";
+
+  const oldLines = oldText.split('\n');
+  const newLines = newText.split('\n');
+
+  // Very naive line-by-line diff for demonstration
+  // Real diff algos are complex, this just shows what lines match roughly or creates a visual output
+  const output = [];
+  let i = 0;
+  let j = 0;
+
+  while (i < oldLines.length || j < newLines.length) {
+    if (i < oldLines.length && j < newLines.length && oldLines[i] === newLines[j]) {
+      output.push({ type: 'same', text: oldLines[i] });
+      i++;
+      j++;
+    } else if (j < newLines.length && (i >= oldLines.length || !oldLines.includes(newLines[j]))) {
+       // New line added
+       output.push({ type: 'added', text: newLines[j] });
+       j++;
+    } else if (i < oldLines.length) {
+       // Old line removed
+       output.push({ type: 'removed', text: oldLines[i] });
+       i++;
+    }
+  }
+  return output;
+};
+
 function PageHistory({ page, onBack, onRevert, canRevert }) {
+  const [revisions, setRevisions] = useState([]);
+  const [selectedVersion, setSelectedVersion] = useState(null);
+
+  useEffect(() => {
+    if (page) {
+      db.getHistory(page.slug).then(setRevisions);
+    }
+  }, [page]);
+
   if (!page) return null;
-  const revisions = db.getHistory(page.slug);
+
+  const handleToggleDiff = (version) => {
+    if (selectedVersion === version) {
+      setSelectedVersion(null);
+    } else {
+      setSelectedVersion(version);
+    }
+  };
 
   return (
      <div className="wiki-article">
@@ -135,30 +220,63 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
         <h1>Revision History: {page.title}</h1>
 
         <ul className="wiki-history-list">
-          {revisions.map((rev) => (
-            <li key={rev.version} className="history-item">
-               <div className="history-meta">
-                 <span className="history-version">Version {rev.version}</span>
-                 <span className="history-author">
-                   Edited by {rev.authorId} on {new Date(rev.timestamp).toLocaleString()}
-                 </span>
-               </div>
-               <div className="history-actions">
-                 {canRevert && rev.version !== page.currentRevision.version && (
-                   <button
-                     className="btn btn-secondary"
-                     style={{fontSize: '0.8rem'}}
-                     onClick={() => onRevert(rev.version)}
-                   >
-                     Revert to this
-                   </button>
-                 )}
-                 {rev.version === page.currentRevision.version && (
-                   <span style={{fontSize: '0.8rem', color: 'green', fontWeight: 600, padding: '0.2rem 0.5rem'}}>Current</span>
-                 )}
-               </div>
-            </li>
-          ))}
+          {revisions.map((rev, index) => {
+             // Find previous revision to diff against
+             const prevRev = revisions[index + 1];
+             const isDiffOpen = selectedVersion === rev.version;
+
+             return (
+              <React.Fragment key={rev.version}>
+                <li className="history-item" style={{flexDirection: 'column', alignItems: 'stretch'}}>
+                   <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%'}}>
+                     <div className="history-meta">
+                       <span className="history-version">Version {rev.version}</span>
+                       <span className="history-author">
+                         Edited by {rev.authorId} on {new Date(rev.timestamp).toLocaleString()}
+                       </span>
+                     </div>
+                     <div className="history-actions">
+                       <button
+                         className="btn btn-secondary"
+                         style={{fontSize: '0.8rem', marginRight: '0.5rem'}}
+                         onClick={() => handleToggleDiff(rev.version)}
+                       >
+                         {isDiffOpen ? 'Hide Changes' : 'Show Changes'}
+                       </button>
+
+                       {canRevert && rev.version !== page.currentRevision.version && (
+                         <button
+                           className="btn btn-secondary"
+                           style={{fontSize: '0.8rem'}}
+                           onClick={() => onRevert(rev.version)}
+                         >
+                           Revert to this
+                         </button>
+                       )}
+                       {rev.version === page.currentRevision.version && (
+                         <span style={{fontSize: '0.8rem', color: 'green', fontWeight: 600, padding: '0.2rem 0.5rem'}}>Current</span>
+                       )}
+                     </div>
+                   </div>
+
+                   {isDiffOpen && (
+                     <div style={{marginTop: '1rem', background: '#f9fafb', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb', fontSize: '0.9rem', fontFamily: 'monospace', whiteSpace: 'pre-wrap'}}>
+                        {computeDiff(prevRev ? prevRev.content : "", rev.content).map((line, k) => (
+                          <div key={k} style={{
+                            backgroundColor: line.type === 'added' ? '#dcfce7' : line.type === 'removed' ? '#fee2e2' : 'transparent',
+                            color: line.type === 'removed' ? '#991b1b' : line.type === 'added' ? '#166534' : 'inherit',
+                            padding: '0 0.25rem'
+                          }}>
+                            {line.type === 'added' ? '+ ' : line.type === 'removed' ? '- ' : '  '}
+                            {line.text}
+                          </div>
+                        ))}
+                     </div>
+                   )}
+                </li>
+              </React.Fragment>
+             );
+          })}
         </ul>
       </div>
     </div>
@@ -226,28 +344,37 @@ export default function Wiki() {
   const [currentUser, setCurrentUser] = useState(null);
   const [pages, setPages] = useState([]);
   const [currentPageSlug, setCurrentPageSlug] = useState('home');
+  const [currentPageData, setCurrentPageData] = useState(null);
   const [viewMode, setViewMode] = useState('read'); // read, edit, history, new
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0); // Force update trigger
 
   // Load Initial Data
   useEffect(() => {
-    const initData = () => {
-      db.init();
-      const loadedUsers = db.getUsers();
+    const initData = async () => {
+      await db.init();
+      const loadedUsers = await db.getUsers();
       setUsers(loadedUsers);
       setCurrentUser(loadedUsers[0]);
-      setPages(db.getPages());
+      const loadedPages = await db.getPages();
+      setPages(loadedPages);
       setLoading(false);
     };
     initData();
-  }, []);
+  }, [tick]); // Reload all data on tick
 
-  // Derived state (replaces explicit state that caused lint error)
-  const currentPageData = useMemo(() => {
-    return currentPageSlug ? db.getPage(currentPageSlug) : null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPageSlug, pages, tick]);
+  // Update Current Page Data when dependencies change
+  useEffect(() => {
+    const loadPage = async () => {
+      if (currentPageSlug) {
+          const page = await db.getPage(currentPageSlug);
+          setCurrentPageData(page);
+      } else {
+          setCurrentPageData(null);
+      }
+    };
+    loadPage();
+  }, [currentPageSlug, tick]);
 
   const handleSwitchUser = (userId) => {
     const user = users.find(u => u.id === userId);
@@ -265,8 +392,10 @@ export default function Wiki() {
   };
 
   // Derived state for permissions
-  const currentGroup = currentUser ? db.getGroups()[currentUser.groups[0]] : null;
-  const canEdit = currentGroup?.permissions.includes('write');
+  // Note: ideally we fetch groups structure, but for simplicity/performance in render we use hardcoded roles
+  // that match the server seed data.
+  const canEdit = currentUser && (currentUser.groups.includes('admin') || currentUser.groups.includes('editor'));
+  const canDelete = currentUser && currentUser.groups.includes('admin');
 
   if (loading) return <div className="wiki-container">Loading...</div>;
 
@@ -305,9 +434,8 @@ export default function Wiki() {
             initialTitle={currentPageData.title}
             initialContent={currentPageData.currentRevision.content}
             onCancel={() => setViewMode('read')}
-            onSave={(title, content) => {
-              db.savePage(currentPageData.slug, title, content, currentUser);
-              setPages(db.getPages()); // Refresh list
+            onSave={async (title, content) => {
+              await db.savePage(currentPageData.slug, title, content, currentUser);
               setTick(t => t + 1); // Trigger data refresh
               setViewMode('read');
             }}
@@ -320,13 +448,13 @@ export default function Wiki() {
             initialTitle=""
             initialContent=""
             onCancel={() => setViewMode('read')}
-            onSave={(title, content) => {
+            onSave={async (title, content) => {
               const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
               if (!slug) return alert("Please enter a valid title");
-              if (db.getPage(slug)) return alert("Page already exists");
+              const exists = await db.getPage(slug);
+              if (exists) return alert("Page already exists");
 
-              db.savePage(slug, title, content, currentUser);
-              setPages(db.getPages());
+              await db.savePage(slug, title, content, currentUser);
               setCurrentPageSlug(slug);
               setTick(t => t + 1);
               setViewMode('read');
@@ -338,11 +466,10 @@ export default function Wiki() {
           <PageHistory
             page={currentPageData}
             onBack={() => setViewMode('read')}
-            canRevert={currentGroup?.permissions.includes('delete')}
-            onRevert={(version) => {
+            canRevert={canDelete}
+            onRevert={async (version) => {
                if(window.confirm(`Are you sure you want to revert to version ${version}?`)) {
-                 db.revert(currentPageData.slug, version, currentUser);
-                 setPages(db.getPages());
+                 await db.revert(currentPageData.slug, version, currentUser);
                  setTick(t => t + 1);
                  setViewMode('read');
                }
