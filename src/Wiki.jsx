@@ -68,6 +68,9 @@ function PageViewer({ page, onEdit, onHistory, canEdit }) {
       <div className="wiki-content-area">
         <h1>{title}</h1>
         <div style={{color: '#6b7280', fontSize: '0.9rem', marginBottom: '2rem'}}>
+          <span style={{backgroundColor: '#e5e7eb', color: '#374151', padding: '0.1rem 0.4rem', borderRadius: '4px', marginRight: '0.5rem', fontSize: '0.8rem', fontWeight: 600}}>
+            v{currentRevision.version}
+          </span>
           Last updated by {currentRevision.authorId} on {new Date(currentRevision.timestamp).toLocaleString()}
         </div>
         <div className="wiki-body">
@@ -284,6 +287,12 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
 }
 
 function Sidebar({ pages, currentPageSlug, onSelectPage, onCreatePage, currentUser, users, onSwitchUser }) {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredPages = pages.filter(page =>
+    page.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <aside className="wiki-sidebar">
       <div className="wiki-brand">
@@ -307,6 +316,14 @@ function Sidebar({ pages, currentPageSlug, onSelectPage, onCreatePage, currentUs
       </div>
 
       <div className="wiki-nav" style={{marginTop: '2rem'}}>
+        <input
+          type="text"
+          className="wiki-search-input"
+          placeholder="Search pages..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
           <span style={{fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase', color: '#9ca3af', letterSpacing: '0.05em'}}>Pages</span>
           <button
@@ -319,7 +336,7 @@ function Sidebar({ pages, currentPageSlug, onSelectPage, onCreatePage, currentUs
           </button>
         </div>
         <ul className="wiki-nav-list">
-          {pages.map(page => (
+          {filteredPages.map(page => (
             <li key={page.slug} className="wiki-nav-item">
               <a
                 href={`#${page.slug}`}
@@ -330,6 +347,9 @@ function Sidebar({ pages, currentPageSlug, onSelectPage, onCreatePage, currentUs
               </a>
             </li>
           ))}
+          {filteredPages.length === 0 && (
+             <li style={{color: '#6b7280', fontSize: '0.9rem', fontStyle: 'italic', padding: '0.5rem'}}>No pages found</li>
+          )}
         </ul>
       </div>
     </aside>
