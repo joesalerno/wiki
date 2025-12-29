@@ -418,14 +418,14 @@ function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage,
         </div>
       </div>
 
+      <input
+        type="text"
+        className="wiki-search-input"
+        placeholder="Search pages..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+      />
       <div className="wiki-nav" style={{marginTop: '2rem'}}>
-        <input
-          type="text"
-          className="wiki-search-input"
-          placeholder="Search pages..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
 
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
           <span style={{fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase', color: '#9ca3af', letterSpacing: '0.05em'}}>Pages</span>
