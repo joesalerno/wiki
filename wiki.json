@@ -1,0 +1,120 @@
+{
+  "users": [
+    {
+      "id": "u1",
+      "name": "Alice (Admin)",
+      "groups": [
+        "admin"
+      ]
+    },
+    {
+      "id": "u2",
+      "name": "Bob (Editor)",
+      "groups": [
+        "editor"
+      ]
+    },
+    {
+      "id": "u3",
+      "name": "Charlie (Viewer)",
+      "groups": [
+        "viewer"
+      ]
+    }
+  ],
+  "groups": {
+    "admin": {
+      "permissions": [
+        "read",
+        "write",
+        "delete",
+        "manage"
+      ]
+    },
+    "editor": {
+      "permissions": [
+        "read",
+        "write"
+      ]
+    },
+    "viewer": {
+      "permissions": [
+        "read"
+      ]
+    }
+  },
+  "sections": {
+    "general": {
+      "id": "general",
+      "name": "General",
+      "permissions": {
+        "admin": [
+          "read",
+          "write",
+          "manage"
+        ],
+        "editor": [
+          "read",
+          "write"
+        ],
+        "viewer": [
+          "read"
+        ]
+      },
+      "requiresReview": false
+    },
+    "dev-section": {
+      "id": "dev-section",
+      "name": "Development",
+      "permissions": {
+        "admin": [
+          "read",
+          "write",
+          "manage"
+        ],
+        "editor": [
+          "read",
+          "write"
+        ],
+        "viewer": [
+          "read"
+        ]
+      },
+      "requiresReview": true
+    }
+  },
+  "pages": {
+    "home": {
+      "id": "home",
+      "slug": "home",
+      "title": "Home",
+      "sectionId": "general",
+      "revisions": [
+        {
+          "version": 1,
+          "content": "# Welcome to React Wiki\n\nThis is a minimal, dependency-free Wiki component.\n\n*   Secure\n*   Versioned\n*   Fast\n\nTry editing this page!",
+          "authorId": "u1",
+          "timestamp": 1767040475228
+        }
+      ],
+      "pendingRevisions": []
+    },
+    "dev-docs": {
+      "id": "dev-docs",
+      "slug": "dev-docs",
+      "title": "Dev Docs",
+      "sectionId": "dev-section",
+      "revisions": [],
+      "pendingRevisions": [
+        {
+          "version": 1,
+          "content": "This is a dev doc.",
+          "authorId": "u1",
+          "timestamp": 1767040585035,
+          "id": "zf4ri7prf",
+          "status": "pending"
+        }
+      ]
+    }
+  }
+}
