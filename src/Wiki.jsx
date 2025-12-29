@@ -190,7 +190,7 @@ const computeDiff = (oldText, newText) => {
 
 function PageHistory({ page, onBack, onRevert, canRevert }) {
   const [revisions, setRevisions] = useState([]);
-  const [selectedVersion, setSelectedVersion] = useState(null);
+  const [expandedView, setExpandedView] = useState({ version: null, mode: null }); // mode: 'diff' | 'full'
 
   useEffect(() => {
     if (page) {
@@ -201,10 +201,18 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
   if (!page) return null;
 
   const handleToggleDiff = (version) => {
-    if (selectedVersion === version) {
-      setSelectedVersion(null);
+    if (expandedView.version === version && expandedView.mode === 'diff') {
+      setExpandedView({ version: null, mode: null });
     } else {
-      setSelectedVersion(version);
+      setExpandedView({ version, mode: 'diff' });
+    }
+  };
+
+  const handleToggleFull = (version) => {
+    if (expandedView.version === version && expandedView.mode === 'full') {
+      setExpandedView({ version: null, mode: null });
+    } else {
+      setExpandedView({ version, mode: 'full' });
     }
   };
 
@@ -226,7 +234,8 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
           {revisions.map((rev, index) => {
              // Find previous revision to diff against
              const prevRev = revisions[index + 1];
-             const isDiffOpen = selectedVersion === rev.version;
+             const isDiffOpen = expandedView.version === rev.version && expandedView.mode === 'diff';
+             const isFullOpen = expandedView.version === rev.version && expandedView.mode === 'full';
 
              return (
               <React.Fragment key={rev.version}>
@@ -245,6 +254,13 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
                          onClick={() => handleToggleDiff(rev.version)}
                        >
                          {isDiffOpen ? 'Hide Changes' : 'Show Changes'}
+                       </button>
+                       <button
+                         className="btn btn-secondary"
+                         style={{fontSize: '0.8rem', marginRight: '0.5rem'}}
+                         onClick={() => handleToggleFull(rev.version)}
+                       >
+                         {isFullOpen ? 'Hide Full' : 'Show Full'}
                        </button>
 
                        {canRevert && rev.version !== page.currentRevision.version && (
@@ -274,6 +290,12 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
                             {line.text}
                           </div>
                         ))}
+                     </div>
+                   )}
+
+                   {isFullOpen && (
+                     <div style={{marginTop: '1rem', background: '#fff', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb'}}>
+                        {parseMarkdown(rev.content)}
                      </div>
                    )}
                 </li>

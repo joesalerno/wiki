@@ -4,7 +4,6 @@ const API_URL = 'http://localhost:3001/api';
 export const db = {
   // Init is now just a placeholder or could check server health, but we'll leave it simple
   async init() {
-    // console.log("DB Init (Async)");
   },
 
   async getUsers() {
