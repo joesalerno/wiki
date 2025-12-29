@@ -1,0 +1,127 @@
+{
+  "users": [
+    {
+      "id": "u1",
+      "name": "Alice (Admin)",
+      "groups": [
+        "admin"
+      ]
+    },
+    {
+      "id": "u2",
+      "name": "Bob (Editor)",
+      "groups": [
+        "editor"
+      ]
+    },
+    {
+      "id": "u3",
+      "name": "Charlie (Viewer)",
+      "groups": [
+        "viewer"
+      ]
+    }
+  ],
+  "groups": {
+    "admin": {
+      "permissions": [
+        "read",
+        "write",
+        "delete",
+        "manage"
+      ]
+    },
+    "editor": {
+      "permissions": [
+        "read",
+        "write"
+      ]
+    },
+    "viewer": {
+      "permissions": [
+        "read"
+      ]
+    }
+  },
+  "sections": {
+    "general": {
+      "id": "general",
+      "title": "General",
+      "readGroups": [
+        "viewer",
+        "editor",
+        "admin"
+      ],
+      "writeGroups": [
+        "editor",
+        "admin"
+      ],
+      "reviewRequired": false,
+      "approverGroups": [
+        "admin"
+      ]
+    },
+    "restricted": {
+      "id": "restricted",
+      "title": "Restricted Area",
+      "readGroups": [
+        "editor",
+        "admin"
+      ],
+      "writeGroups": [
+        "editor",
+        "admin"
+      ],
+      "reviewRequired": true,
+      "approverGroups": [
+        "admin"
+      ]
+    }
+  },
+  "pages": {
+    "home": {
+      "id": "home",
+      "slug": "home",
+      "title": "Home",
+      "sectionId": "general",
+      "revisions": [
+        {
+          "version": 1,
+          "content": "# Welcome to React Wiki\n\nThis is a minimal, dependency-free Wiki component.\n\n*   Secure\n*   Versioned\n*   Fast\n\nTry editing this page!",
+          "authorId": "u1",
+          "timestamp": 1767042017125
+        }
+      ]
+    },
+    "secret": {
+      "id": "secret",
+      "slug": "secret",
+      "title": "Secret",
+      "sectionId": "restricted",
+      "revisions": [
+        {
+          "version": 1,
+          "content": "Shhh",
+          "authorId": "u1",
+          "timestamp": 1767042017135
+        }
+      ]
+    },
+    "top-secret": {
+      "id": "top-secret",
+      "slug": "top-secret",
+      "title": "Top Secret",
+      "sectionId": "restricted",
+      "revisions": [],
+      "pendingRevisions": [
+        {
+          "content": "This is top secret.",
+          "title": "Top Secret",
+          "authorId": "u2",
+          "timestamp": 1767042079073,
+          "sectionId": "restricted"
+        }
+      ]
+    }
+  }
+}
