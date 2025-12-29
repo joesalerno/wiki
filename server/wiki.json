@@ -43,31 +43,84 @@
       ]
     }
   },
+  "sections": {
+    "general": {
+      "id": "general",
+      "title": "General",
+      "readGroups": [
+        "viewer",
+        "editor",
+        "admin"
+      ],
+      "writeGroups": [
+        "editor",
+        "admin"
+      ],
+      "reviewRequired": false,
+      "approverGroups": [
+        "admin"
+      ]
+    },
+    "restricted": {
+      "id": "restricted",
+      "title": "Restricted Area",
+      "readGroups": [
+        "editor",
+        "admin"
+      ],
+      "writeGroups": [
+        "admin"
+      ],
+      "reviewRequired": true,
+      "approverGroups": [
+        "admin"
+      ]
+    }
+  },
   "pages": {
     "home": {
       "id": "home",
       "slug": "home",
       "title": "Home",
+      "sectionId": "general",
       "revisions": [
-        {
-          "version": 3,
-          "content": "# Preview Test\n\n* List item",
-          "authorId": "u2",
-          "timestamp": 1767035308406
-        },
-        {
-          "version": 2,
-          "content": "# Preview Test\n\n* List item",
-          "authorId": "u2",
-          "timestamp": 1767035255704
-        },
         {
           "version": 1,
           "content": "# Welcome to React Wiki\n\nThis is a minimal, dependency-free Wiki component.\n\n*   Secure\n*   Versioned\n*   Fast\n\nTry editing this page!",
           "authorId": "u1",
-          "timestamp": 1767035045408
+          "timestamp": 1767042355796
         }
       ]
+    },
+    "secret-page-9530": {
+      "id": "secret-page-9530",
+      "slug": "secret-page-9530",
+      "title": "Secret Page 9530",
+      "sectionId": "restricted",
+      "revisions": [
+        {
+          "version": 1,
+          "content": "This is a secret.",
+          "authorId": "u1",
+          "timestamp": 1767042365511
+        }
+      ],
+      "pendingRevisions": []
+    },
+    "bob-page-9530": {
+      "id": "bob-page-9530",
+      "slug": "bob-page-9530",
+      "title": "Bob Page 9530",
+      "sectionId": "general",
+      "revisions": [
+        {
+          "version": 1,
+          "content": "Bob content.",
+          "authorId": "u2",
+          "timestamp": 1767042365769
+        }
+      ],
+      "pendingRevisions": []
     }
   }
 }

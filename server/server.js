@@ -20,24 +20,68 @@ app.get('/api/groups', async (req, res) => {
   res.json(groups);
 });
 
+app.get('/api/sections', async (req, res) => {
+  const sections = await dbController.getSections();
+  res.json(sections);
+});
+
 app.get('/api/pages', async (req, res) => {
   const pages = await dbController.getPages();
   res.json(pages);
 });
 
 app.get('/api/pages/:slug', async (req, res) => {
-  const page = await dbController.getPage(req.params.slug);
-  if (!page) return res.status(404).json({ error: 'Page not found' });
-  res.json(page);
+  const userId = req.query.userId;
+  const user = userId ? { id: userId } : null; // Simple user object with just ID
+  try {
+    const page = await dbController.getPage(req.params.slug, user);
+    if (!page) return res.status(404).json({ error: 'Page not found' });
+    res.json(page);
+  } catch (err) {
+    if (err.message === 'Permission denied') {
+       return res.status(403).json({ error: 'Permission denied' });
+    }
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/pages/:slug', async (req, res) => {
-  const { title, content, user } = req.body;
+  const { title, content, user, sectionId } = req.body;
   if (!user || !title || content === undefined) {
     return res.status(400).json({ error: 'Missing fields' });
   }
-  const page = await dbController.savePage(req.params.slug, title, content, user);
-  res.json(page);
+  try {
+    const page = await dbController.savePage(req.params.slug, title, content, user, sectionId);
+    res.json(page);
+  } catch (err) {
+    res.status(403).json({ error: err.message });
+  }
+});
+
+app.post('/api/pages/:slug/approve', async (req, res) => {
+  const { revisionIndex, user } = req.body;
+  if (!user || revisionIndex === undefined) {
+    return res.status(400).json({ error: 'Missing fields' });
+  }
+  try {
+    const page = await dbController.approveRevision(req.params.slug, revisionIndex, user);
+    res.json(page);
+  } catch (err) {
+    res.status(403).json({ error: err.message });
+  }
+});
+
+app.post('/api/pages/:slug/reject', async (req, res) => {
+  const { revisionIndex, user } = req.body;
+  if (!user || revisionIndex === undefined) {
+    return res.status(400).json({ error: 'Missing fields' });
+  }
+  try {
+    const page = await dbController.rejectRevision(req.params.slug, revisionIndex, user);
+    res.json(page);
+  } catch (err) {
+    res.status(403).json({ error: err.message });
+  }
 });
 
 app.get('/api/pages/:slug/history', async (req, res) => {

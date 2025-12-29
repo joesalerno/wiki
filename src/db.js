@@ -22,23 +22,74 @@ export const db = {
     return await res.json();
   },
 
+  async getSections() {
+    const res = await fetch(`${API_URL}/sections`);
+    return await res.json();
+  },
+
   async getPages() {
     const res = await fetch(`${API_URL}/pages`);
     return await res.json();
   },
 
   async getPage(slug) {
-    const res = await fetch(`${API_URL}/pages/${slug}`);
+    // We need to pass current user ID.
+    // Since this is a simple app, we can store/retrieve user from localStorage
+    // or assume the caller handles user context.
+    // However, db.js is a module. It doesn't know about React state.
+    // We'll rely on the UI calling a new method or update this one to accept user.
+    // BUT, existing calls in Wiki.jsx just pass slug.
+    // We need to update Wiki.jsx to pass user ID.
+    // OR we can hack it by reading from a global variable or something, but that's bad.
+    // Let's change the signature to getPage(slug, userId).
+    // And update Wiki.jsx.
+    console.warn("db.getPage(slug) is deprecated. Use getPage(slug, userId)");
+    return null;
+  },
+
+  async getPageWithUser(slug, userId) {
+    const url = userId ? `${API_URL}/pages/${slug}?userId=${userId}` : `${API_URL}/pages/${slug}`;
+    const res = await fetch(url);
     if (!res.ok) return null;
     return await res.json();
   },
 
-  async savePage(slug, title, content, user) {
+  async savePage(slug, title, content, user, sectionId) {
     const res = await fetch(`${API_URL}/pages/${slug}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, content, user })
+      body: JSON.stringify({ title, content, user, sectionId })
     });
+    if (!res.ok) {
+       const err = await res.json();
+       throw new Error(err.error || 'Failed to save');
+    }
+    return await res.json();
+  },
+
+  async approveRevision(slug, revisionIndex, user) {
+    const res = await fetch(`${API_URL}/pages/${slug}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisionIndex, user })
+    });
+    if (!res.ok) {
+       const err = await res.json();
+       throw new Error(err.error || 'Failed to approve');
+    }
+    return await res.json();
+  },
+
+  async rejectRevision(slug, revisionIndex, user) {
+    const res = await fetch(`${API_URL}/pages/${slug}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisionIndex, user })
+    });
+    if (!res.ok) {
+       const err = await res.json();
+       throw new Error(err.error || 'Failed to reject');
+    }
     return await res.json();
   },
 
