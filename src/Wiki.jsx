@@ -46,7 +46,7 @@ const formatInline = (text) => {
 
 // --- Sub-components ---
 
-function PageViewer({ page, onEdit, onHistory, canEdit }) {
+function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onApprove, onReject, isApprover }) {
   if (!page) return <div>Page not found</div>;
 
   const { title, currentRevision } = page;
@@ -66,24 +66,70 @@ function PageViewer({ page, onEdit, onHistory, canEdit }) {
            </div>
         </div>
 
+        {pendingRevisions && pendingRevisions.length > 0 && (
+            <div style={{marginBottom: '1.5rem', border: '1px solid #f59e0b', backgroundColor: '#fffbeb', borderRadius: '0.5rem', padding: '1rem'}}>
+               <h3 style={{fontSize: '1rem', color: '#92400e', marginTop: 0}}>⚠️ Pending Revisions</h3>
+               <p style={{fontSize: '0.9rem', color: '#b45309'}}>
+                  There are {pendingRevisions.length} changes waiting for approval.
+               </p>
+               {isApprover ? (
+                   <ul style={{listStyle: 'none', padding: 0, margin: '0.5rem 0 0'}}>
+                       {pendingRevisions.map((rev, idx) => (
+                           <li key={idx} style={{backgroundColor: 'white', padding: '0.5rem', marginBottom: '0.5rem', borderRadius: '0.25rem', border: '1px solid #e5e7eb'}}>
+                               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem'}}>
+                                   <div style={{fontSize: '0.85rem'}}>
+                                       <strong>{rev.authorId}</strong> proposed changes on {new Date(rev.timestamp).toLocaleString()}
+                                   </div>
+                                   <div>
+                                       <button className="btn btn-sm btn-primary" style={{marginRight: '0.5rem', backgroundColor: '#10b981', borderColor: '#059669'}} onClick={() => onApprove(idx)}>Approve</button>
+                                       <button className="btn btn-sm btn-secondary" style={{color: '#dc2626', borderColor: '#fca5a5'}} onClick={() => onReject(idx)}>Reject</button>
+                                   </div>
+                               </div>
+                               <div style={{maxHeight: '200px', overflow: 'auto', border: '1px solid #eee', fontSize: '0.8rem', padding: '0.5rem', backgroundColor: '#f9fafb'}}>
+                                   {computeDiff(currentRevision ? currentRevision.content : "", rev.content).map((line, k) => (
+                                     <div key={k} style={{
+                                       backgroundColor: line.type === 'added' ? '#dcfce7' : line.type === 'removed' ? '#fee2e2' : 'transparent',
+                                       color: line.type === 'removed' ? '#991b1b' : line.type === 'added' ? '#166534' : 'inherit',
+                                       whiteSpace: 'pre-wrap', fontFamily: 'monospace'
+                                     }}>
+                                       {line.type === 'added' ? '+ ' : line.type === 'removed' ? '- ' : '  '}
+                                       {line.text}
+                                     </div>
+                                   ))}
+                               </div>
+                           </li>
+                       ))}
+                   </ul>
+               ) : (
+                   <div style={{fontSize: '0.8rem', fontStyle: 'italic', color: '#b45309'}}>You do not have permission to approve these changes.</div>
+               )}
+            </div>
+        )}
+
         <div style={{color: '#6b7280', fontSize: '0.85rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-          <span style={{backgroundColor: '#e5e7eb', color: '#374151', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 600, fontSize: '0.75rem'}}>
-            v{currentRevision.version}
-          </span>
-          <span>Updated {new Date(currentRevision.timestamp).toLocaleDateString()} by {currentRevision.authorId}</span>
+          {currentRevision && (
+            <>
+              <span style={{backgroundColor: '#e5e7eb', color: '#374151', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 600, fontSize: '0.75rem'}}>
+                v{currentRevision.version}
+              </span>
+              <span>Updated {new Date(currentRevision.timestamp).toLocaleDateString()} by {currentRevision.authorId}</span>
+            </>
+          )}
+          {!currentRevision && <span>No published content.</span>}
         </div>
 
         <div className="wiki-body">
-          {parseMarkdown(currentRevision.content)}
+          {currentRevision ? parseMarkdown(currentRevision.content) : <p>This page has no content yet.</p>}
         </div>
       </div>
     </div>
   );
 }
 
-function PageEditor({ page, initialTitle, initialContent, onSave, onCancel }) {
+function PageEditor({ page, initialTitle, initialContent, initialSectionId, sections, onSave, onCancel }) {
   const [title, setTitle] = useState(initialTitle || '');
   const [content, setContent] = useState(initialContent || '');
+  const [sectionId, setSectionId] = useState(initialSectionId || (Object.keys(sections)[0]));
   const [activeTab, setActiveTab] = useState('write'); // 'write' or 'preview'
 
   return (
@@ -100,19 +146,30 @@ function PageEditor({ page, initialTitle, initialContent, onSave, onCancel }) {
 
            <div className="wiki-header-actions">
               <button className="btn btn-sm btn-secondary" onClick={onCancel}>Cancel</button>
-              <button className="btn btn-sm btn-primary" onClick={() => onSave(title, content)}>Save Changes</button>
+              <button className="btn btn-sm btn-primary" onClick={() => onSave(title, content, sectionId)}>Save Changes</button>
            </div>
         </div>
 
-        <div className="wiki-editor-meta">
+        <div className="wiki-editor-meta" style={{display: 'flex', gap: '1rem'}}>
           <input
             type="text"
             className="wiki-input-text"
+            style={{flex: 2}}
             placeholder="Page Title"
             value={title}
             onChange={e => setTitle(e.target.value)}
             disabled={!!page}
           />
+          <select
+             className="wiki-input-text"
+             style={{flex: 1}}
+             value={sectionId}
+             onChange={e => setSectionId(e.target.value)}
+          >
+             {Object.values(sections).map(s => (
+                 <option key={s.id} value={s.id}>{s.title}</option>
+             ))}
+          </select>
         </div>
 
         <div style={{borderBottom: '1px solid #e5e7eb', marginBottom: '1rem', display: 'flex', gap: '1rem'}}>
@@ -311,12 +368,33 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
   );
 }
 
-function Sidebar({ pages, currentPageSlug, onSelectPage, onCreatePage, currentUser, users, onSwitchUser }) {
+function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage, currentUser, users, onSwitchUser }) {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredPages = pages.filter(page =>
     page.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Group pages by section
+  const pagesBySection = {};
+  Object.values(sections).forEach(section => {
+      // Check read permission
+      const canRead = section.readGroups.some(g => currentUser?.groups.includes(g));
+      if (canRead) {
+          pagesBySection[section.id] = {
+              title: section.title,
+              pages: []
+          };
+      }
+  });
+
+  filteredPages.forEach(page => {
+      // If page belongs to a section visible to user
+      const secId = page.sectionId || 'general';
+      if (pagesBySection[secId]) {
+          pagesBySection[secId].pages.push(page);
+      }
+  });
 
   return (
     <aside className="wiki-sidebar">
@@ -360,22 +438,35 @@ function Sidebar({ pages, currentPageSlug, onSelectPage, onCreatePage, currentUs
             +
           </button>
         </div>
-        <ul className="wiki-nav-list">
-          {filteredPages.map(page => (
-            <li key={page.slug} className="wiki-nav-item">
-              <a
-                href={`#${page.slug}`}
-                onClick={(e) => { e.preventDefault(); onSelectPage(page.slug); }}
-                className={`wiki-nav-link ${currentPageSlug === page.slug ? 'active' : ''}`}
-              >
-                {page.title}
-              </a>
-            </li>
+
+        <div className="wiki-nav-list">
+          {Object.keys(pagesBySection).map(secId => (
+            <div key={secId} style={{marginBottom: '1rem'}}>
+               <div style={{fontSize: '0.8rem', fontWeight: 600, color: '#4b5563', padding: '0 0.5rem', marginBottom: '0.25rem'}}>
+                   {pagesBySection[secId].title}
+               </div>
+               <ul>
+                   {pagesBySection[secId].pages.map(page => (
+                        <li key={page.slug} className="wiki-nav-item">
+                        <a
+                            href={`#${page.slug}`}
+                            onClick={(e) => { e.preventDefault(); onSelectPage(page.slug); }}
+                            className={`wiki-nav-link ${currentPageSlug === page.slug ? 'active' : ''}`}
+                        >
+                            {page.title}
+                        </a>
+                        </li>
+                   ))}
+                   {pagesBySection[secId].pages.length === 0 && (
+                       <li style={{color: '#9ca3af', fontSize: '0.8rem', paddingLeft: '0.5rem'}}>Empty</li>
+                   )}
+               </ul>
+            </div>
           ))}
-          {filteredPages.length === 0 && (
-             <li style={{color: '#6b7280', fontSize: '0.9rem', fontStyle: 'italic', padding: '0.5rem'}}>No pages found</li>
+          {Object.keys(pagesBySection).length === 0 && (
+             <div style={{color: '#6b7280', fontSize: '0.9rem', fontStyle: 'italic', padding: '0.5rem'}}>No accessible sections</div>
           )}
-        </ul>
+        </div>
       </div>
     </aside>
   );
@@ -388,6 +479,7 @@ export default function Wiki() {
   const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [pages, setPages] = useState([]);
+  const [sections, setSections] = useState({});
   const [currentPageSlug, setCurrentPageSlug] = useState('home');
   const [currentPageData, setCurrentPageData] = useState(null);
   const [viewMode, setViewMode] = useState('read'); // read, edit, history, new
@@ -398,11 +490,27 @@ export default function Wiki() {
   useEffect(() => {
     const initData = async () => {
       await db.init();
-      const loadedUsers = await db.getUsers();
+      const [loadedUsers, loadedPages, loadedSections] = await Promise.all([
+         db.getUsers(),
+         db.getPages(),
+         db.getSections()
+      ]);
       setUsers(loadedUsers);
-      setCurrentUser(loadedUsers[0]);
-      const loadedPages = await db.getPages();
+
+      let initialUser = currentUser;
+      if (!initialUser) {
+          const storedId = localStorage.getItem('wiki_user_id');
+          if (storedId) initialUser = loadedUsers.find(u => u.id === storedId);
+      }
+      if (!initialUser) initialUser = loadedUsers[0];
+
+      if (initialUser && (!currentUser || currentUser.id !== initialUser.id)) {
+          setCurrentUser(initialUser);
+          localStorage.setItem('wiki_user_id', initialUser.id);
+      }
+
       setPages(loadedPages);
+      setSections(loadedSections);
       setLoading(false);
     };
     initData();
@@ -423,7 +531,11 @@ export default function Wiki() {
 
   const handleSwitchUser = (userId) => {
     const user = users.find(u => u.id === userId);
-    if (user) setCurrentUser(user);
+    if (user) {
+        setCurrentUser(user);
+        localStorage.setItem('wiki_user_id', userId);
+        setTick(t => t + 1); // Refresh data with new user permissions
+    }
   };
 
   const handleSelectPage = (slug) => {
@@ -437,9 +549,13 @@ export default function Wiki() {
   };
 
   // Derived state for permissions
-  // Note: ideally we fetch groups structure, but for simplicity/performance in render we use hardcoded roles
-  // that match the server seed data.
-  const canEdit = currentUser && (currentUser.groups.includes('admin') || currentUser.groups.includes('editor'));
+  // Logic: Check section permissions for current page.
+  const currentSection = currentPageData ? sections[currentPageData.sectionId] : null;
+  const canEdit = currentUser && currentSection
+      ? currentSection.writeGroups.some(g => currentUser.groups.includes(g))
+      : false; // If new page, we check in save/create logic, but button shouldn't show if no page.
+
+  // For delete/revert, we restrict to admin for now, or match server logic
   const canDelete = currentUser && currentUser.groups.includes('admin');
 
   if (loading) return <div className="wiki-container">Loading...</div>;
@@ -448,6 +564,7 @@ export default function Wiki() {
     <div className="wiki-container">
       <Sidebar
         pages={pages}
+        sections={sections}
         currentPageSlug={currentPageSlug}
         onSelectPage={handleSelectPage}
         onCreatePage={handleCreatePage}
@@ -463,6 +580,24 @@ export default function Wiki() {
             onEdit={() => setViewMode('edit')}
             onHistory={() => setViewMode('history')}
             canEdit={canEdit}
+            pendingRevisions={currentPageData.pendingRevisions}
+            isApprover={currentUser && sections[currentPageData.sectionId]?.approverGroups.some(g => currentUser.groups.includes(g))}
+            onApprove={async (index) => {
+               if(window.confirm("Approve this revision?")) {
+                  try {
+                      await db.approveRevision(currentPageData.slug, index, currentUser);
+                      setTick(t => t + 1);
+                  } catch(e) { alert(e.message); }
+               }
+            }}
+            onReject={async (index) => {
+               if(window.confirm("Reject this revision?")) {
+                   try {
+                       await db.rejectRevision(currentPageData.slug, index, currentUser);
+                       setTick(t => t + 1);
+                   } catch(e) { alert(e.message); }
+               }
+            }}
           />
         )}
 
@@ -478,11 +613,20 @@ export default function Wiki() {
             page={currentPageData}
             initialTitle={currentPageData.title}
             initialContent={currentPageData.currentRevision.content}
+            initialSectionId={currentPageData.sectionId}
+            sections={sections}
             onCancel={() => setViewMode('read')}
-            onSave={async (title, content) => {
-              await db.savePage(currentPageData.slug, title, content, currentUser);
-              setTick(t => t + 1); // Trigger data refresh
-              setViewMode('read');
+            onSave={async (title, content, sectionId) => {
+              try {
+                const res = await db.savePage(currentPageData.slug, title, content, currentUser, sectionId);
+                if (res.status === 'pending') {
+                    alert("Changes submitted for review.");
+                }
+                setTick(t => t + 1); // Trigger data refresh
+                setViewMode('read');
+              } catch (e) {
+                alert(e.message);
+              }
             }}
           />
         )}
@@ -492,17 +636,27 @@ export default function Wiki() {
             page={null}
             initialTitle=""
             initialContent=""
+            initialSectionId={null}
+            sections={sections}
             onCancel={() => setViewMode('read')}
-            onSave={async (title, content) => {
+            onSave={async (title, content, sectionId) => {
               const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
               if (!slug) return alert("Please enter a valid title");
               const exists = await db.getPage(slug);
               if (exists) return alert("Page already exists");
 
-              await db.savePage(slug, title, content, currentUser);
-              setCurrentPageSlug(slug);
-              setTick(t => t + 1);
-              setViewMode('read');
+              try {
+                const res = await db.savePage(slug, title, content, currentUser, sectionId);
+                 if (res.status === 'pending') {
+                    alert("Page submitted for review.");
+                    // Go to home or stay?
+                }
+                setCurrentPageSlug(slug);
+                setTick(t => t + 1);
+                setViewMode('read');
+              } catch (e) {
+                 alert(e.message);
+              }
             }}
           />
         )}

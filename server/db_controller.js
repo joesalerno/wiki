@@ -2,7 +2,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-const DB_PATH = path.resolve('wiki.json');
+const DB_PATH = path.resolve('server/wiki.json');
 
 const SEED_DATA = {
   users: [
@@ -15,11 +15,30 @@ const SEED_DATA = {
     editor: { permissions: ['read', 'write'] },
     viewer: { permissions: ['read'] },
   },
+  sections: {
+    general: {
+      id: 'general',
+      title: 'General',
+      readGroups: ['viewer', 'editor', 'admin'],
+      writeGroups: ['editor', 'admin'],
+      reviewRequired: false,
+      approverGroups: ['admin']
+    },
+    restricted: {
+      id: 'restricted',
+      title: 'Restricted Area',
+      readGroups: ['editor', 'admin'],
+      writeGroups: ['editor', 'admin'],
+      reviewRequired: true,
+      approverGroups: ['admin']
+    }
+  },
   pages: {
     'home': {
       id: 'home',
       slug: 'home',
       title: 'Home',
+      sectionId: 'general',
       revisions: [
         {
           version: 1,
@@ -59,35 +78,109 @@ export const dbController = {
     return data.groups;
   },
 
-  async getPages() {
+  async getSections() {
     const data = await loadData();
-    return Object.values(data.pages).map(p => {
-       const head = p.revisions[0];
+    return data.sections;
+  },
+
+  async getPages(user) {
+    const data = await loadData();
+    // If no user provided, return nothing or public only?
+    // Assuming viewer group is minimum. If no user, maybe we shouldn't return anything or just public?
+    // Let's assume user is required for now as per frontend flow.
+    // If user is null/undefined, treat as anonymous (no groups).
+
+    const userGroups = user ? (data.users.find(u => u.id === user.id)?.groups || []) : [];
+
+    return Object.values(data.pages).filter(p => {
+       const section = data.sections[p.sectionId || 'general'];
+       return section && section.readGroups.some(g => userGroups.includes(g));
+    }).map(p => {
+       const head = p.revisions[0] || {};
        return {
          slug: p.slug,
          title: p.title,
+         sectionId: p.sectionId,
          updatedAt: head.timestamp,
          authorId: head.authorId
        };
     });
   },
 
-  async getPage(slug) {
+  async getPage(slug, user) {
     const data = await loadData();
     const page = data.pages[slug];
     if (!page) return null;
+
+    const userGroups = user ? (data.users.find(u => u.id === user.id)?.groups || []) : [];
+    const section = data.sections[page.sectionId || 'general'];
+
+    if (!section || !section.readGroups.some(g => userGroups.includes(g))) {
+        // Permission denied (or not found to hide existence if strictly secure, but 403 is better for now)
+        throw new Error("Permission denied");
+    }
+
     return {
       ...page,
       currentRevision: page.revisions[0]
     };
   },
 
-  async savePage(slug, title, content, user) {
+  async savePage(slug, title, content, user, sectionId) {
     const data = await loadData();
     let page = data.pages[slug];
 
+    // Determine section
+    const targetSectionId = sectionId || (page ? page.sectionId : 'general');
+    const section = data.sections[targetSectionId];
+    if (!section) throw new Error("Invalid section");
+
+    // Check write permissions
+    // Find full user object to get groups (trusting input user for now, but should ideally re-verify)
+    const dbUser = data.users.find(u => u.id === user.id);
+    if (!dbUser) throw new Error("User not found");
+
+    const canWrite = section.writeGroups.some(g => dbUser.groups.includes(g));
+    if (!canWrite) throw new Error("Permission denied");
+
+    // Check review requirements
+    const reviewRequired = section.reviewRequired || page?.reviewRequired;
+    const isApprover = section.approverGroups.some(g => dbUser.groups.includes(g));
+
+    if (reviewRequired && !isApprover) {
+        if (!page) {
+             // Create page shell if it doesn't exist
+             page = {
+                id: slug,
+                slug,
+                title,
+                sectionId: targetSectionId,
+                revisions: [],
+                pendingRevisions: []
+             };
+             data.pages[slug] = page;
+        } else {
+             // Ensure pendingRevisions array exists
+             if (!page.pendingRevisions) page.pendingRevisions = [];
+             // Update metadata if needed (though title change might need review too)
+             // For now we store the proposed changes in pendingRevision
+        }
+
+        page.pendingRevisions.push({
+            content,
+            title,
+            authorId: user.id,
+            timestamp: Date.now(),
+            sectionId: targetSectionId
+        });
+
+        await saveData(data);
+        return { ...page, status: 'pending' };
+    }
+
+    // Normal Save (Publish immediately)
     const newRevision = {
-      version: page ? page.revisions[0].version + 1 : 1,
+      version: (page && page.revisions.length > 0) ? page.revisions[0].version + 1 : 1,
       content,
       authorId: user.id,
       timestamp: Date.now()
@@ -98,17 +191,77 @@ export const dbController = {
         id: slug,
         slug,
         title,
+        sectionId: targetSectionId,
         revisions: []
       };
       data.pages[slug] = page;
     } else {
         page.title = title;
+        page.sectionId = targetSectionId;
     }
 
     page.revisions.unshift(newRevision);
 
     await saveData(data);
-    return page;
+    return { ...page, status: 'published' };
+  },
+
+  async approveRevision(slug, index, user) {
+     const data = await loadData();
+     const page = data.pages[slug];
+     if (!page || !page.pendingRevisions || !page.pendingRevisions[index]) {
+         throw new Error("Revision not found");
+     }
+
+     const pendingRev = page.pendingRevisions[index];
+     const section = data.sections[pendingRev.sectionId || page.sectionId];
+
+     const dbUser = data.users.find(u => u.id === user.id);
+     const isApprover = section.approverGroups.some(g => dbUser.groups.includes(g));
+
+     if (!isApprover) throw new Error("Permission denied");
+
+     // Apply the revision
+     const newRevision = {
+         version: (page.revisions.length > 0) ? page.revisions[0].version + 1 : 1,
+         content: pendingRev.content,
+         authorId: pendingRev.authorId,
+         timestamp: pendingRev.timestamp,
+         approvedBy: user.id,
+         approvedAt: Date.now()
+     };
+
+     page.revisions.unshift(newRevision);
+     page.title = pendingRev.title; // Update title if it changed
+     if (pendingRev.sectionId) page.sectionId = pendingRev.sectionId;
+
+     // Remove from pending
+     page.pendingRevisions.splice(index, 1);
+
+     await saveData(data);
+     return page;
+  },
+
+  async rejectRevision(slug, index, user) {
+     const data = await loadData();
+     const page = data.pages[slug];
+     if (!page || !page.pendingRevisions || !page.pendingRevisions[index]) {
+         throw new Error("Revision not found");
+     }
+
+     const pendingRev = page.pendingRevisions[index];
+     const section = data.sections[pendingRev.sectionId || page.sectionId];
+
+     const dbUser = data.users.find(u => u.id === user.id);
+     const isApprover = section.approverGroups.some(g => dbUser.groups.includes(g));
+
+     if (!isApprover) throw new Error("Permission denied");
+
+     // Just remove it
+     page.pendingRevisions.splice(index, 1);
+
+     await saveData(data);
+     return page;
   },
 
   async getHistory(slug) {
@@ -125,7 +278,7 @@ export const dbController = {
      const targetRev = page.revisions.find(r => r.version === parseInt(version));
      if(!targetRev) return null;
 
-     // Save as new revision
-     return await this.savePage(slug, page.title, targetRev.content, user);
+     // Revert counts as a new save, so we go through savePage to handle checks
+     return await this.savePage(slug, page.title, targetRev.content, user, page.sectionId);
   }
 };
