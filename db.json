@@ -1,0 +1,52 @@
+{
+  "pages": {
+    "welcome-to-wiki": {
+      "slug": "welcome-to-wiki",
+      "title": "Welcome to Wiki",
+      "versions": [
+        {
+          "version": 1,
+          "content": "# Welcome to the Wiki\n\nThis is a minimal React Wiki.\n\n- No dependencies\n- Versioning\n- History",
+          "author": "admin",
+          "timestamp": 1700000000000
+        }
+      ]
+    },
+    "test-page": {
+      "slug": "test-page",
+      "title": "Test Page",
+      "versions": [
+        {
+          "version": 1,
+          "content": "Testing persistence",
+          "author": "admin",
+          "timestamp": 1767032909068
+        }
+      ]
+    },
+    "frontend-test-page": {
+      "slug": "frontend-test-page",
+      "title": "Frontend Test Page",
+      "versions": [
+        {
+          "version": 1,
+          "content": "# Frontend Test\n\nThis is a test from Playwright.",
+          "author": "admin",
+          "timestamp": 1767033307355
+        }
+      ]
+    },
+    "test-page-xss": {
+      "slug": "test-page-xss",
+      "title": "Test XSS",
+      "versions": [
+        {
+          "version": 1,
+          "content": "<h1>hello</h1><script>alert(1)</script>",
+          "author": "admin",
+          "timestamp": 1767033642786
+        }
+      ]
+    }
+  }
+}
