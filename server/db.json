@@ -1,0 +1,58 @@
+{
+  "groups": {
+    "admins": ["admin"],
+    "editors": ["alice"],
+    "viewers": ["bob", "charlie"]
+  },
+  "sections": [
+    {
+      "id": "s1",
+      "title": "General",
+      "permissions": {
+        "read": ["admins", "editors", "viewers"],
+        "write": ["admins", "editors"],
+        "review": []
+      },
+      "reviewRequired": false
+    },
+    {
+      "id": "s2",
+      "title": "Engineering",
+      "permissions": {
+        "read": ["admins", "editors", "viewers"],
+        "write": ["admins", "editors"],
+        "review": ["admins"]
+      },
+      "reviewRequired": true
+    },
+    {
+      "id": "s3",
+      "title": "HR",
+      "permissions": {
+        "read": ["admins"],
+        "write": ["admins"],
+        "review": []
+      },
+      "reviewRequired": false
+    }
+  ],
+  "pages": [
+    {
+      "id": "p1",
+      "sectionId": "s1",
+      "title": "Welcome",
+      "latestVersion": 1
+    }
+  ],
+  "revisions": [
+    {
+      "id": "r1",
+      "pageId": "p1",
+      "version": 1,
+      "content": "Welcome to the **Company Wiki**!\n\nThis is a place for all our documentation.",
+      "author": "admin",
+      "status": "published",
+      "timestamp": 1715400000000
+    }
+  ]
+}
