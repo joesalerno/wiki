@@ -46,7 +46,7 @@ const formatInline = (text) => {
 
 // --- Sub-components ---
 
-function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onApprove, onReject, isApprover }) {
+function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onApprove, onReject, isApprover, currentUser }) {
   if (!page) return <div>Page not found</div>;
 
   const { title, currentRevision } = page;
@@ -81,7 +81,20 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
                                        <strong>{rev.authorId}</strong> proposed changes on {new Date(rev.timestamp).toLocaleString()}
                                    </div>
                                    <div>
-                                       <button className="btn btn-sm btn-primary" style={{marginRight: '0.5rem', backgroundColor: '#10b981', borderColor: '#059669'}} onClick={() => onApprove(idx)}>Approve</button>
+                                       <button
+                                          className="btn btn-sm btn-primary"
+                                          style={{
+                                              marginRight: '0.5rem',
+                                              backgroundColor: currentUser?.id === rev.authorId ? '#9ca3af' : '#10b981',
+                                              borderColor: currentUser?.id === rev.authorId ? '#9ca3af' : '#059669',
+                                              cursor: currentUser?.id === rev.authorId ? 'not-allowed' : 'pointer'
+                                          }}
+                                          onClick={() => onApprove(idx)}
+                                          disabled={currentUser?.id === rev.authorId}
+                                          title={currentUser?.id === rev.authorId ? "Cannot approve own changes" : "Approve"}
+                                       >
+                                           Approve
+                                       </button>
                                        <button className="btn btn-sm btn-secondary" style={{color: '#dc2626', borderColor: '#fca5a5'}} onClick={() => onReject(idx)}>Reject</button>
                                    </div>
                                </div>
@@ -811,6 +824,7 @@ export default function Wiki() {
             canEdit={canEdit}
             pendingRevisions={currentPageData.pendingRevisions}
             isApprover={currentUser && sections[currentPageData.sectionId]?.approverGroups.some(g => currentUser.groups.includes(g))}
+            currentUser={currentUser}
             onApprove={async (index) => {
                if(window.confirm("Approve this revision?")) {
                   try {

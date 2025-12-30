@@ -332,6 +332,11 @@ export const dbController = {
 
      if (!isApprover) throw new Error("Permission denied");
 
+     // Self-approval check
+     if (user.id === pendingRev.authorId) {
+         throw new Error("Cannot approve your own changes");
+     }
+
      // Apply the revision
      const newRevision = {
          version: (page.revisions.length > 0) ? page.revisions[0].version + 1 : 1,
