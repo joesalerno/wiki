@@ -1,8 +1,10 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-const DB_PATH = path.resolve('server/wiki.json');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DB_PATH = path.join(__dirname, 'wiki.json');
 
 const SEED_DATA = {
   users: [
@@ -67,10 +69,58 @@ async function saveData(data) {
   await fs.writeFile(DB_PATH, JSON.stringify(data, null, 2));
 }
 
+async function checkAdmin(user, data) {
+    if (!user) throw new Error("Unauthorized");
+    const dbUser = data.users.find(u => u.id === user.id);
+    if (!dbUser) throw new Error("User not found");
+
+    // Check if user is in admin group
+    if (dbUser.groups.includes('admin')) return true;
+
+    // Or check explicit manage permission if we want to be more granular
+    // But for now, hardcoding admin check for simplicity as requested
+    throw new Error("Permission denied: Admin access required");
+}
+
 export const dbController = {
   async getUsers() {
     const data = await loadData();
     return data.users;
+  },
+
+  async createUser(user, requestor) {
+      const data = await loadData();
+      await checkAdmin(requestor, data);
+
+      if (data.users.find(u => u.id === user.id)) throw new Error("User ID already exists");
+      data.users.push(user);
+      await saveData(data);
+      return user;
+  },
+
+  async updateUser(id, userData, requestor) {
+      const data = await loadData();
+      await checkAdmin(requestor, data);
+
+      const index = data.users.findIndex(u => u.id === id);
+      if (index === -1) throw new Error("User not found");
+
+      // Merge updates
+      data.users[index] = { ...data.users[index], ...userData, id }; // Keep ID immutable ideally, but let's allow overwrite if passed matches
+      await saveData(data);
+      return data.users[index];
+  },
+
+  async deleteUser(id, requestor) {
+      const data = await loadData();
+      await checkAdmin(requestor, data);
+
+      const index = data.users.findIndex(u => u.id === id);
+      if (index === -1) throw new Error("User not found");
+
+      data.users.splice(index, 1);
+      await saveData(data);
+      return { success: true };
   },
 
   async getGroups() {
@@ -78,9 +128,69 @@ export const dbController = {
     return data.groups;
   },
 
+  async createGroup(id, groupData, requestor) {
+      const data = await loadData();
+      await checkAdmin(requestor, data);
+
+      if (data.groups[id]) throw new Error("Group already exists");
+      data.groups[id] = groupData;
+      await saveData(data);
+      return { id, ...groupData };
+  },
+
+  async updateGroup(id, groupData, requestor) {
+      const data = await loadData();
+      await checkAdmin(requestor, data);
+
+      if (!data.groups[id]) throw new Error("Group not found");
+      data.groups[id] = groupData;
+      await saveData(data);
+      return { id, ...groupData };
+  },
+
+  async deleteGroup(id, requestor) {
+      const data = await loadData();
+      await checkAdmin(requestor, data);
+
+      if (!data.groups[id]) throw new Error("Group not found");
+      delete data.groups[id];
+      await saveData(data);
+      return { success: true };
+  },
+
   async getSections() {
     const data = await loadData();
     return data.sections;
+  },
+
+  async createSection(id, sectionData, requestor) {
+      const data = await loadData();
+      await checkAdmin(requestor, data);
+
+      if (data.sections[id]) throw new Error("Section already exists");
+      data.sections[id] = { ...sectionData, id };
+      await saveData(data);
+      return data.sections[id];
+  },
+
+  async updateSection(id, sectionData, requestor) {
+      const data = await loadData();
+      await checkAdmin(requestor, data);
+
+      if (!data.sections[id]) throw new Error("Section not found");
+      data.sections[id] = { ...sectionData, id };
+      await saveData(data);
+      return data.sections[id];
+  },
+
+  async deleteSection(id, requestor) {
+      const data = await loadData();
+      await checkAdmin(requestor, data);
+
+      if (!data.sections[id]) throw new Error("Section not found");
+      delete data.sections[id];
+      await saveData(data);
+      return { success: true };
   },
 
   async getPages(user) {
@@ -145,9 +255,10 @@ export const dbController = {
 
     // Check review requirements
     const reviewRequired = section.reviewRequired || page?.reviewRequired;
-    const isApprover = section.approverGroups.some(g => dbUser.groups.includes(g));
+    // const isApprover = section.approverGroups.some(g => dbUser.groups.includes(g));
 
-    if (reviewRequired && !isApprover) {
+    // Even if user is approver, if review is required, we queue it.
+    if (reviewRequired) {
         if (!page) {
              // Create page shell if it doesn't exist
              page = {
@@ -220,6 +331,11 @@ export const dbController = {
      const isApprover = section.approverGroups.some(g => dbUser.groups.includes(g));
 
      if (!isApprover) throw new Error("Permission denied");
+
+     // Self-approval check
+     if (user.id === pendingRev.authorId) {
+         throw new Error("Cannot approve your own changes");
+     }
 
      // Apply the revision
      const newRevision = {

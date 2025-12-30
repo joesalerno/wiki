@@ -46,7 +46,7 @@ const formatInline = (text) => {
 
 // --- Sub-components ---
 
-function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onApprove, onReject, isApprover }) {
+function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onApprove, onReject, isApprover, currentUser }) {
   if (!page) return <div>Page not found</div>;
 
   const { title, currentRevision } = page;
@@ -81,7 +81,20 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
                                        <strong>{rev.authorId}</strong> proposed changes on {new Date(rev.timestamp).toLocaleString()}
                                    </div>
                                    <div>
-                                       <button className="btn btn-sm btn-primary" style={{marginRight: '0.5rem', backgroundColor: '#10b981', borderColor: '#059669'}} onClick={() => onApprove(idx)}>Approve</button>
+                                       <button
+                                          className="btn btn-sm btn-primary"
+                                          style={{
+                                              marginRight: '0.5rem',
+                                              backgroundColor: currentUser?.id === rev.authorId ? '#9ca3af' : '#10b981',
+                                              borderColor: currentUser?.id === rev.authorId ? '#9ca3af' : '#059669',
+                                              cursor: currentUser?.id === rev.authorId ? 'not-allowed' : 'pointer'
+                                          }}
+                                          onClick={() => onApprove(idx)}
+                                          disabled={currentUser?.id === rev.authorId}
+                                          title={currentUser?.id === rev.authorId ? "Cannot approve own changes" : "Approve"}
+                                       >
+                                           Approve
+                                       </button>
                                        <button className="btn btn-sm btn-secondary" style={{color: '#dc2626', borderColor: '#fca5a5'}} onClick={() => onReject(idx)}>Reject</button>
                                    </div>
                                </div>
@@ -368,7 +381,219 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
   );
 }
 
-function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage, currentUser, users, onSwitchUser }) {
+function AdminPanel({ users, groups, sections, onUpdate, onClose }) {
+    const [tab, setTab] = useState('users'); // users, groups, sections
+    const [editingId, setEditingId] = useState(null);
+    const [formData, setFormData] = useState({});
+
+    // Reset form when switching tabs or editing
+    const startEdit = (id, data) => {
+        setEditingId(id);
+        setFormData(data ? { ...data } : {});
+    };
+
+    const handleSave = async () => {
+        try {
+            if (tab === 'users') {
+                if (editingId === 'new') {
+                    await db.createUser(formData);
+                } else {
+                    await db.updateUser(editingId, formData);
+                }
+            } else if (tab === 'groups') {
+                 if (editingId === 'new') {
+                    await db.createGroup(formData.id, formData);
+                } else {
+                    await db.updateGroup(editingId, formData);
+                }
+            } else if (tab === 'sections') {
+                 if (editingId === 'new') {
+                    await db.createSection(formData.id, formData);
+                } else {
+                    await db.updateSection(editingId, formData);
+                }
+            }
+            onUpdate();
+            setEditingId(null);
+        } catch (e) {
+            alert(e.message);
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!window.confirm("Are you sure?")) return;
+        try {
+            if (tab === 'users') await db.deleteUser(id);
+            if (tab === 'groups') await db.deleteGroup(id);
+            if (tab === 'sections') await db.deleteSection(id);
+            onUpdate();
+        } catch (e) {
+            alert(e.message);
+        }
+    };
+
+    const renderUserForm = () => (
+        <div className="admin-form">
+            <input type="text" placeholder="ID (e.g. u4)" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={editingId !== 'new'} />
+            <input type="text" placeholder="Name" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+            <div style={{fontSize: '0.9rem', marginBottom: '0.5rem'}}>Groups (comma separated):</div>
+            <input type="text" placeholder="admin, editor" value={formData.groups ? formData.groups.join(', ') : ''} onChange={e => setFormData({...formData, groups: e.target.value.split(',').map(s => s.trim()).filter(Boolean)})} />
+            <div className="admin-actions">
+                <button className="btn btn-sm btn-primary" onClick={handleSave}>Save</button>
+                <button className="btn btn-sm btn-secondary" onClick={() => setEditingId(null)}>Cancel</button>
+            </div>
+        </div>
+    );
+
+    const renderGroupForm = () => (
+        <div className="admin-form">
+            <input type="text" placeholder="ID (e.g. moderator)" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={editingId !== 'new'} />
+            <div style={{fontSize: '0.9rem', marginBottom: '0.5rem'}}>Permissions (comma separated):</div>
+            <input type="text" placeholder="read, write" value={formData.permissions ? formData.permissions.join(', ') : ''} onChange={e => setFormData({...formData, permissions: e.target.value.split(',').map(s => s.trim()).filter(Boolean)})} />
+             <div className="admin-actions">
+                <button className="btn btn-sm btn-primary" onClick={handleSave}>Save</button>
+                <button className="btn btn-sm btn-secondary" onClick={() => setEditingId(null)}>Cancel</button>
+            </div>
+        </div>
+    );
+
+    const renderSectionForm = () => (
+        <div className="admin-form">
+             <input type="text" placeholder="ID (e.g. news)" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={editingId !== 'new'} />
+             <input type="text" placeholder="Title" value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} />
+
+             <label>Read Groups:</label>
+             <select multiple style={{width: '100%', height: '80px'}} value={formData.readGroups || []} onChange={e => setFormData({...formData, readGroups: Array.from(e.target.selectedOptions, o => o.value)})}>
+                 {Object.keys(groups).map(g => <option key={g} value={g}>{g}</option>)}
+             </select>
+
+             <label>Write Groups:</label>
+             <select multiple style={{width: '100%', height: '80px'}} value={formData.writeGroups || []} onChange={e => setFormData({...formData, writeGroups: Array.from(e.target.selectedOptions, o => o.value)})}>
+                 {Object.keys(groups).map(g => <option key={g} value={g}>{g}</option>)}
+             </select>
+
+             <div style={{margin: '0.5rem 0'}}>
+                <label>
+                    <input type="checkbox" checked={formData.reviewRequired || false} onChange={e => setFormData({...formData, reviewRequired: e.target.checked})} />
+                    Review Required
+                </label>
+             </div>
+
+             <label>Approver Groups:</label>
+             <select multiple style={{width: '100%', height: '80px'}} value={formData.approverGroups || []} onChange={e => setFormData({...formData, approverGroups: Array.from(e.target.selectedOptions, o => o.value)})}>
+                 {Object.keys(groups).map(g => <option key={g} value={g}>{g}</option>)}
+             </select>
+
+             <div className="admin-actions" style={{marginTop: '1rem'}}>
+                <button className="btn btn-sm btn-primary" onClick={handleSave}>Save</button>
+                <button className="btn btn-sm btn-secondary" onClick={() => setEditingId(null)}>Cancel</button>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="wiki-article">
+            <div className="wiki-content-area">
+                <div className="wiki-header">
+                    <h1 className="wiki-header-title">Admin Panel</h1>
+                    <button className="btn btn-sm btn-secondary" onClick={onClose}>Close</button>
+                </div>
+
+                <div style={{display: 'flex', gap: '1rem', borderBottom: '1px solid #e5e7eb', marginBottom: '1rem'}}>
+                    {['users', 'groups', 'sections'].map(t => (
+                        <button
+                            key={t}
+                            onClick={() => { setTab(t); setEditingId(null); }}
+                            style={{
+                                padding: '0.5rem 1rem',
+                                border: 'none',
+                                background: 'none',
+                                borderBottom: tab === t ? '2px solid #2563eb' : '2px solid transparent',
+                                fontWeight: tab === t ? 600 : 400,
+                                textTransform: 'capitalize',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {t}
+                        </button>
+                    ))}
+                </div>
+
+                {!editingId && (
+                     <div style={{marginBottom: '1rem'}}>
+                        <button className="btn btn-sm btn-primary" onClick={() => startEdit('new', {})}>
+                            + Create New {tab.slice(0, -1)}
+                        </button>
+                     </div>
+                )}
+
+                {editingId ? (
+                    <div style={{maxWidth: '500px'}}>
+                        {tab === 'users' && renderUserForm()}
+                        {tab === 'groups' && renderGroupForm()}
+                        {tab === 'sections' && renderSectionForm()}
+                    </div>
+                ) : (
+                    <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem'}}>
+                        <thead>
+                            <tr style={{textAlign: 'left', borderBottom: '1px solid #e5e7eb'}}>
+                                <th style={{padding: '0.5rem'}}>ID</th>
+                                <th style={{padding: '0.5rem'}}>Details</th>
+                                <th style={{padding: '0.5rem'}}>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {tab === 'users' && users.map(u => (
+                                <tr key={u.id} style={{borderBottom: '1px solid #f3f4f6'}}>
+                                    <td style={{padding: '0.5rem'}}>{u.id}</td>
+                                    <td style={{padding: '0.5rem'}}>
+                                        <div><strong>{u.name}</strong></div>
+                                        <div style={{color: '#6b7280', fontSize: '0.8rem'}}>{u.groups.join(', ')}</div>
+                                    </td>
+                                    <td style={{padding: '0.5rem'}}>
+                                        <button className="btn-text" onClick={() => startEdit(u.id, u)}>Edit</button>
+                                        <button className="btn-text" style={{color: '#dc2626', marginLeft: '0.5rem'}} onClick={() => handleDelete(u.id)}>Delete</button>
+                                    </td>
+                                </tr>
+                            ))}
+                             {tab === 'groups' && Object.keys(groups).map(gid => (
+                                <tr key={gid} style={{borderBottom: '1px solid #f3f4f6'}}>
+                                    <td style={{padding: '0.5rem'}}>{gid}</td>
+                                    <td style={{padding: '0.5rem'}}>
+                                        <div style={{color: '#6b7280', fontSize: '0.8rem'}}>{groups[gid]?.permissions?.join(', ')}</div>
+                                    </td>
+                                    <td style={{padding: '0.5rem'}}>
+                                        <button className="btn-text" onClick={() => startEdit(gid, {id: gid, ...groups[gid]})}>Edit</button>
+                                        <button className="btn-text" style={{color: '#dc2626', marginLeft: '0.5rem'}} onClick={() => handleDelete(gid)}>Delete</button>
+                                    </td>
+                                </tr>
+                            ))}
+                             {tab === 'sections' && Object.values(sections).map(s => (
+                                <tr key={s.id} style={{borderBottom: '1px solid #f3f4f6'}}>
+                                    <td style={{padding: '0.5rem'}}>{s.id}</td>
+                                    <td style={{padding: '0.5rem'}}>
+                                        <div><strong>{s.title}</strong></div>
+                                        <div style={{fontSize: '0.8rem'}}>
+                                            <span style={{color: '#059669'}}>R: {s.readGroups.join(', ')}</span> |
+                                            <span style={{color: '#d97706'}}> W: {s.writeGroups.join(', ')}</span>
+                                        </div>
+                                        {s.reviewRequired && <div style={{fontSize: '0.75rem', color: '#dc2626'}}>Review Required (Approvers: {s.approverGroups.join(', ')})</div>}
+                                    </td>
+                                    <td style={{padding: '0.5rem'}}>
+                                        <button className="btn-text" onClick={() => startEdit(s.id, s)}>Edit</button>
+                                        <button className="btn-text" style={{color: '#dc2626', marginLeft: '0.5rem'}} onClick={() => handleDelete(s.id)}>Delete</button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage, currentUser, users, onSwitchUser, onOpenAdmin }) {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredPages = pages.filter(page =>
@@ -413,8 +638,11 @@ function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage,
             <option key={u.id} value={u.id}>{u.name}</option>
           ))}
         </select>
-        <div style={{marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280'}}>
-          Access: {currentUser?.groups.join(', ')}
+        <div style={{marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+          <span>Access: {currentUser?.groups.join(', ')}</span>
+          {currentUser?.groups.includes('admin') && (
+              <button className="btn-text" style={{fontSize: '0.75rem', color: '#2563eb', fontWeight: 600}} onClick={onOpenAdmin}>Admin</button>
+          )}
         </div>
       </div>
 
@@ -477,12 +705,13 @@ function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage,
 export default function Wiki() {
   // State
   const [users, setUsers] = useState([]);
+  const [groups, setGroups] = useState({});
   const [currentUser, setCurrentUser] = useState(null);
   const [pages, setPages] = useState([]);
   const [sections, setSections] = useState({});
   const [currentPageSlug, setCurrentPageSlug] = useState('home');
   const [currentPageData, setCurrentPageData] = useState(null);
-  const [viewMode, setViewMode] = useState('read'); // read, edit, history, new
+  const [viewMode, setViewMode] = useState('read'); // read, edit, history, new, admin
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0); // Force update trigger
 
@@ -490,12 +719,14 @@ export default function Wiki() {
   useEffect(() => {
     const initData = async () => {
       await db.init();
-      const [loadedUsers, loadedPages, loadedSections] = await Promise.all([
+      const [loadedUsers, loadedGroups, loadedPages, loadedSections] = await Promise.all([
          db.getUsers(),
+         db.getGroups(),
          db.getPages(),
          db.getSections()
       ]);
       setUsers(loadedUsers);
+      setGroups(loadedGroups);
 
       let initialUser = currentUser;
       if (!initialUser) {
@@ -571,9 +802,20 @@ export default function Wiki() {
         currentUser={currentUser}
         users={users}
         onSwitchUser={handleSwitchUser}
+        onOpenAdmin={() => setViewMode('admin')}
       />
 
       <main className="wiki-main">
+        {viewMode === 'admin' && (
+            <AdminPanel
+                users={users}
+                groups={groups}
+                sections={sections}
+                onUpdate={() => setTick(t => t + 1)}
+                onClose={() => setViewMode('read')}
+            />
+        )}
+
         {viewMode === 'read' && currentPageData && (
           <PageViewer
             page={currentPageData}
@@ -582,6 +824,7 @@ export default function Wiki() {
             canEdit={canEdit}
             pendingRevisions={currentPageData.pendingRevisions}
             isApprover={currentUser && sections[currentPageData.sectionId]?.approverGroups.some(g => currentUser.groups.includes(g))}
+            currentUser={currentUser}
             onApprove={async (index) => {
                if(window.confirm("Approve this revision?")) {
                   try {

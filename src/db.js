@@ -22,8 +22,131 @@ export const db = {
     return await res.json();
   },
 
+  async createGroup(id, data) {
+    const userId = localStorage.getItem('wiki_user_id') || 'u3';
+    const res = await fetch(`${API_URL}/groups`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+        body: JSON.stringify({ id, ...data })
+    });
+    if(!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create group");
+    }
+    return await res.json();
+  },
+
+  async updateGroup(id, data) {
+    const userId = localStorage.getItem('wiki_user_id') || 'u3';
+    const res = await fetch(`${API_URL}/groups/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+        body: JSON.stringify(data)
+    });
+    if(!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to update group");
+    }
+    return await res.json();
+  },
+
+  async deleteGroup(id) {
+    const userId = localStorage.getItem('wiki_user_id') || 'u3';
+    const res = await fetch(`${API_URL}/groups/${id}`, {
+        method: 'DELETE',
+        headers: { 'X-User-ID': userId }
+    });
+    if(!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to delete group");
+    }
+    return await res.json();
+  },
+
   async getSections() {
     const res = await fetch(`${API_URL}/sections`);
+    return await res.json();
+  },
+
+  async createSection(id, data) {
+    const userId = localStorage.getItem('wiki_user_id') || 'u3';
+    const res = await fetch(`${API_URL}/sections`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+        body: JSON.stringify({ id, ...data })
+    });
+    if(!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create section");
+    }
+    return await res.json();
+  },
+
+  async updateSection(id, data) {
+    const userId = localStorage.getItem('wiki_user_id') || 'u3';
+    const res = await fetch(`${API_URL}/sections/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+        body: JSON.stringify(data)
+    });
+    if(!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to update section");
+    }
+    return await res.json();
+  },
+
+  async deleteSection(id) {
+    const userId = localStorage.getItem('wiki_user_id') || 'u3';
+    const res = await fetch(`${API_URL}/sections/${id}`, {
+        method: 'DELETE',
+        headers: { 'X-User-ID': userId }
+    });
+    if(!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to delete section");
+    }
+    return await res.json();
+  },
+
+  async createUser(user) {
+    const userId = localStorage.getItem('wiki_user_id') || 'u3';
+    const res = await fetch(`${API_URL}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+        body: JSON.stringify(user)
+    });
+    if(!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create user");
+    }
+    return await res.json();
+  },
+
+  async updateUser(id, data) {
+    const userId = localStorage.getItem('wiki_user_id') || 'u3';
+    const res = await fetch(`${API_URL}/users/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+        body: JSON.stringify(data)
+    });
+    if(!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to update user");
+    }
+    return await res.json();
+  },
+
+  async deleteUser(id) {
+    const userId = localStorage.getItem('wiki_user_id') || 'u3';
+    const res = await fetch(`${API_URL}/users/${id}`, {
+        method: 'DELETE',
+        headers: { 'X-User-ID': userId }
+    });
+    if(!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to delete user");
+    }
     return await res.json();
   },
 
