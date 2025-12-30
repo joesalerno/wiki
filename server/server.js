@@ -1,202 +1,34 @@
-
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import { dbController } from './db_controller.js';
+import { ApolloServer } from '@apollo/server';
+import { expressMiddleware } from '@apollo/server/express4';
+import { typeDefs } from './schema.js';
+import { resolvers } from './resolvers.js';
 
 const app = express();
 const PORT = 3001;
 
+const server = new ApolloServer({
+  typeDefs,
+  resolvers,
+});
+
+await server.start();
+
 app.use(cors());
 app.use(bodyParser.json());
 
-app.get('/api/users', async (req, res) => {
-  const users = await dbController.getUsers();
-  res.json(users);
-});
-
-app.get('/api/groups', async (req, res) => {
-  const groups = await dbController.getGroups();
-  res.json(groups);
-});
-
-// Admin API
-app.post('/api/users', async (req, res) => {
-  const userId = req.headers['x-user-id'];
-  try {
-      const newUser = await dbController.createUser(req.body, { id: userId });
-      res.json(newUser);
-  } catch (e) {
-      res.status(403).json({ error: e.message });
-  }
-});
-
-app.put('/api/users/:id', async (req, res) => {
-  const userId = req.headers['x-user-id'];
-  try {
-      const updatedUser = await dbController.updateUser(req.params.id, req.body, { id: userId });
-      res.json(updatedUser);
-  } catch (e) {
-      res.status(403).json({ error: e.message });
-  }
-});
-
-app.delete('/api/users/:id', async (req, res) => {
-  const userId = req.headers['x-user-id'];
-  try {
-      await dbController.deleteUser(req.params.id, { id: userId });
-      res.json({ success: true });
-  } catch (e) {
-      res.status(403).json({ error: e.message });
-  }
-});
-
-app.post('/api/groups', async (req, res) => {
-  const userId = req.headers['x-user-id'];
-  try {
-      // Body should contain id and other data.
-      const { id, ...data } = req.body;
-      if(!id) throw new Error("Group ID required");
-      const newGroup = await dbController.createGroup(id, data, { id: userId });
-      res.json(newGroup);
-  } catch (e) {
-      res.status(403).json({ error: e.message });
-  }
-});
-
-app.put('/api/groups/:id', async (req, res) => {
-  const userId = req.headers['x-user-id'];
-  try {
-      const updatedGroup = await dbController.updateGroup(req.params.id, req.body, { id: userId });
-      res.json(updatedGroup);
-  } catch (e) {
-      res.status(403).json({ error: e.message });
-  }
-});
-
-app.delete('/api/groups/:id', async (req, res) => {
-  const userId = req.headers['x-user-id'];
-  try {
-      await dbController.deleteGroup(req.params.id, { id: userId });
-      res.json({ success: true });
-  } catch (e) {
-      res.status(403).json({ error: e.message });
-  }
-});
-
-app.post('/api/sections', async (req, res) => {
-  const userId = req.headers['x-user-id'];
-  try {
-      const { id, ...data } = req.body;
-      if(!id) throw new Error("Section ID required");
-      const newSection = await dbController.createSection(id, data, { id: userId });
-      res.json(newSection);
-  } catch (e) {
-      res.status(403).json({ error: e.message });
-  }
-});
-
-app.put('/api/sections/:id', async (req, res) => {
-  const userId = req.headers['x-user-id'];
-  try {
-      const updatedSection = await dbController.updateSection(req.params.id, req.body, { id: userId });
-      res.json(updatedSection);
-  } catch (e) {
-      res.status(403).json({ error: e.message });
-  }
-});
-
-app.delete('/api/sections/:id', async (req, res) => {
-  const userId = req.headers['x-user-id'];
-  try {
-      await dbController.deleteSection(req.params.id, { id: userId });
-      res.json({ success: true });
-  } catch (e) {
-      res.status(403).json({ error: e.message });
-  }
-});
-
-app.get('/api/sections', async (req, res) => {
-  const sections = await dbController.getSections();
-  res.json(sections);
-});
-
-app.get('/api/pages', async (req, res) => {
-  const userId = req.headers['x-user-id'];
-  const user = { id: userId }; // Partial user object, controller will look it up or we should look it up here.
-  // Controller looks it up in `data.users`.
-  const pages = await dbController.getPages(user);
-  res.json(pages);
-});
-
-app.get('/api/pages/:slug', async (req, res) => {
-  const userId = req.headers['x-user-id'];
-  const user = { id: userId };
-  try {
-      const page = await dbController.getPage(req.params.slug, user);
-      if (!page) return res.status(404).json({ error: 'Page not found' });
-      res.json(page);
-  } catch (e) {
-      if (e.message === 'Permission denied') {
-          return res.status(403).json({ error: 'Permission denied' });
-      }
-      res.status(500).json({ error: e.message });
-  }
-});
-
-app.post('/api/pages/:slug', async (req, res) => {
-  const { title, content, user, sectionId } = req.body;
-  if (!user || !title || content === undefined) {
-    return res.status(400).json({ error: 'Missing fields' });
-  }
-  try {
-    const page = await dbController.savePage(req.params.slug, title, content, user, sectionId);
-    res.json(page);
-  } catch (err) {
-    res.status(403).json({ error: err.message });
-  }
-});
-
-app.post('/api/pages/:slug/approve', async (req, res) => {
-  const { index, user } = req.body;
-  if (!user || index === undefined) {
-    return res.status(400).json({ error: 'Missing fields' });
-  }
-  try {
-    const page = await dbController.approveRevision(req.params.slug, index, user);
-    res.json(page);
-  } catch (err) {
-    res.status(403).json({ error: err.message });
-  }
-});
-
-app.post('/api/pages/:slug/reject', async (req, res) => {
-  const { index, user } = req.body;
-  if (!user || index === undefined) {
-    return res.status(400).json({ error: 'Missing fields' });
-  }
-  try {
-    const page = await dbController.rejectRevision(req.params.slug, index, user);
-    res.json(page);
-  } catch (err) {
-    res.status(403).json({ error: err.message });
-  }
-});
-
-app.get('/api/pages/:slug/history', async (req, res) => {
-  const history = await dbController.getHistory(req.params.slug);
-  res.json(history);
-});
-
-app.post('/api/pages/:slug/revert', async (req, res) => {
-  const { version, user } = req.body;
-  if (!user || !version) {
-    return res.status(400).json({ error: 'Missing fields' });
-  }
-  const page = await dbController.revert(req.params.slug, version, user);
-  if (!page) return res.status(404).json({ error: 'Page or version not found' });
-  res.json(page);
-});
+// GraphQL endpoint
+app.use(
+  '/graphql',
+  expressMiddleware(server, {
+    context: async ({ req }) => {
+      const userId = req.headers['x-user-id'];
+      return { userId };
+    },
+  })
+);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
