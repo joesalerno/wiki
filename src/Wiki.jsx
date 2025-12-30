@@ -560,7 +560,7 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose }) {
                                 <tr key={gid} style={{borderBottom: '1px solid #f3f4f6'}}>
                                     <td style={{padding: '0.5rem'}}>{gid}</td>
                                     <td style={{padding: '0.5rem'}}>
-                                        <div style={{color: '#6b7280', fontSize: '0.8rem'}}>{groups[gid].permissions.join(', ')}</div>
+                                        <div style={{color: '#6b7280', fontSize: '0.8rem'}}>{groups[gid]?.permissions?.join(', ')}</div>
                                     </td>
                                     <td style={{padding: '0.5rem'}}>
                                         <button className="btn-text" onClick={() => startEdit(gid, {id: gid, ...groups[gid]})}>Edit</button>
