@@ -15,14 +15,113 @@ app.get('/api/users', async (req, res) => {
   res.json(users);
 });
 
+app.post('/api/users', async (req, res) => {
+  const userId = req.headers['x-user-id'];
+  const user = { id: userId };
+  try {
+    const newUser = await dbController.createUser(req.body, user);
+    res.json(newUser);
+  } catch (e) {
+    res.status(403).json({ error: e.message });
+  }
+});
+
+app.put('/api/users/:id', async (req, res) => {
+  const userId = req.headers['x-user-id'];
+  const user = { id: userId };
+  try {
+    const updatedUser = await dbController.updateUser(req.params.id, req.body, user);
+    res.json(updatedUser);
+  } catch (e) {
+    res.status(403).json({ error: e.message });
+  }
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+  const userId = req.headers['x-user-id'];
+  const user = { id: userId };
+  try {
+    await dbController.deleteUser(req.params.id, user);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(403).json({ error: e.message });
+  }
+});
+
 app.get('/api/groups', async (req, res) => {
   const groups = await dbController.getGroups();
   res.json(groups);
 });
 
+app.post('/api/groups', async (req, res) => {
+  const userId = req.headers['x-user-id'];
+  const user = { id: userId };
+  try {
+    const newGroup = await dbController.createGroup(req.body.id, req.body, user);
+    res.json(newGroup);
+  } catch (e) {
+    res.status(403).json({ error: e.message });
+  }
+});
+
+app.put('/api/groups/:id', async (req, res) => {
+  const userId = req.headers['x-user-id'];
+  const user = { id: userId };
+  try {
+    const updatedGroup = await dbController.updateGroup(req.params.id, req.body, user);
+    res.json(updatedGroup);
+  } catch (e) {
+    res.status(403).json({ error: e.message });
+  }
+});
+
+app.delete('/api/groups/:id', async (req, res) => {
+  const userId = req.headers['x-user-id'];
+  const user = { id: userId };
+  try {
+    await dbController.deleteGroup(req.params.id, user);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(403).json({ error: e.message });
+  }
+});
+
 app.get('/api/sections', async (req, res) => {
   const sections = await dbController.getSections();
   res.json(sections);
+});
+
+app.post('/api/sections', async (req, res) => {
+  const userId = req.headers['x-user-id'];
+  const user = { id: userId };
+  try {
+    const newSection = await dbController.createSection(req.body.id, req.body, user);
+    res.json(newSection);
+  } catch (e) {
+    res.status(403).json({ error: e.message });
+  }
+});
+
+app.put('/api/sections/:id', async (req, res) => {
+  const userId = req.headers['x-user-id'];
+  const user = { id: userId };
+  try {
+    const updatedSection = await dbController.updateSection(req.params.id, req.body, user);
+    res.json(updatedSection);
+  } catch (e) {
+    res.status(403).json({ error: e.message });
+  }
+});
+
+app.delete('/api/sections/:id', async (req, res) => {
+  const userId = req.headers['x-user-id'];
+  const user = { id: userId };
+  try {
+    await dbController.deleteSection(req.params.id, user);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(403).json({ error: e.message });
+  }
 });
 
 app.get('/api/pages', async (req, res) => {

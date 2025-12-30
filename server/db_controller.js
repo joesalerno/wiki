@@ -67,10 +67,58 @@ async function saveData(data) {
   await fs.writeFile(DB_PATH, JSON.stringify(data, null, 2));
 }
 
+function checkPermission(user, groups, permission) {
+  if (!user || !user.groups) return false;
+  return user.groups.some(gid => groups[gid]?.permissions?.includes(permission));
+}
+
 export const dbController = {
   async getUsers() {
     const data = await loadData();
     return data.users;
+  },
+
+  async createUser(user, requestor) {
+    const data = await loadData();
+    const requestorUser = data.users.find(u => u.id === requestor.id);
+    if (!checkPermission(requestorUser, data.groups, 'manage')) {
+      throw new Error("Permission denied");
+    }
+    if (data.users.find(u => u.id === user.id)) {
+      throw new Error("User ID already exists");
+    }
+    data.users.push(user);
+    await saveData(data);
+    return user;
+  },
+
+  async updateUser(id, userData, requestor) {
+    const data = await loadData();
+    const requestorUser = data.users.find(u => u.id === requestor.id);
+    if (!checkPermission(requestorUser, data.groups, 'manage')) {
+      throw new Error("Permission denied");
+    }
+    const index = data.users.findIndex(u => u.id === id);
+    if (index === -1) throw new Error("User not found");
+
+    // Merge updates
+    data.users[index] = { ...data.users[index], ...userData, id }; // Keep ID immutable ideally, but here we allow update of other fields
+    await saveData(data);
+    return data.users[index];
+  },
+
+  async deleteUser(id, requestor) {
+    const data = await loadData();
+    const requestorUser = data.users.find(u => u.id === requestor.id);
+    if (!checkPermission(requestorUser, data.groups, 'manage')) {
+      throw new Error("Permission denied");
+    }
+    const index = data.users.findIndex(u => u.id === id);
+    if (index === -1) throw new Error("User not found");
+
+    data.users.splice(index, 1);
+    await saveData(data);
+    return { success: true };
   },
 
   async getGroups() {
@@ -78,9 +126,81 @@ export const dbController = {
     return data.groups;
   },
 
+  async createGroup(id, groupData, requestor) {
+    const data = await loadData();
+    const requestorUser = data.users.find(u => u.id === requestor.id);
+    if (!checkPermission(requestorUser, data.groups, 'manage')) {
+      throw new Error("Permission denied");
+    }
+    if (data.groups[id]) throw new Error("Group already exists");
+    data.groups[id] = groupData;
+    await saveData(data);
+    return data.groups[id];
+  },
+
+  async updateGroup(id, groupData, requestor) {
+    const data = await loadData();
+    const requestorUser = data.users.find(u => u.id === requestor.id);
+    if (!checkPermission(requestorUser, data.groups, 'manage')) {
+      throw new Error("Permission denied");
+    }
+    if (!data.groups[id]) throw new Error("Group not found");
+    data.groups[id] = { ...data.groups[id], ...groupData };
+    await saveData(data);
+    return data.groups[id];
+  },
+
+  async deleteGroup(id, requestor) {
+    const data = await loadData();
+    const requestorUser = data.users.find(u => u.id === requestor.id);
+    if (!checkPermission(requestorUser, data.groups, 'manage')) {
+      throw new Error("Permission denied");
+    }
+    if (!data.groups[id]) throw new Error("Group not found");
+    delete data.groups[id];
+    await saveData(data);
+    return { success: true };
+  },
+
   async getSections() {
     const data = await loadData();
     return data.sections;
+  },
+
+  async createSection(id, sectionData, requestor) {
+    const data = await loadData();
+    const requestorUser = data.users.find(u => u.id === requestor.id);
+    if (!checkPermission(requestorUser, data.groups, 'manage')) {
+      throw new Error("Permission denied");
+    }
+    if (data.sections[id]) throw new Error("Section already exists");
+    data.sections[id] = { ...sectionData, id };
+    await saveData(data);
+    return data.sections[id];
+  },
+
+  async updateSection(id, sectionData, requestor) {
+    const data = await loadData();
+    const requestorUser = data.users.find(u => u.id === requestor.id);
+    if (!checkPermission(requestorUser, data.groups, 'manage')) {
+      throw new Error("Permission denied");
+    }
+    if (!data.sections[id]) throw new Error("Section not found");
+    data.sections[id] = { ...data.sections[id], ...sectionData, id };
+    await saveData(data);
+    return data.sections[id];
+  },
+
+  async deleteSection(id, requestor) {
+    const data = await loadData();
+    const requestorUser = data.users.find(u => u.id === requestor.id);
+    if (!checkPermission(requestorUser, data.groups, 'manage')) {
+      throw new Error("Permission denied");
+    }
+    if (!data.sections[id]) throw new Error("Section not found");
+    delete data.sections[id];
+    await saveData(data);
+    return { success: true };
   },
 
   async getPages(user) {
@@ -145,9 +265,10 @@ export const dbController = {
 
     // Check review requirements
     const reviewRequired = section.reviewRequired || page?.reviewRequired;
-    const isApprover = section.approverGroups.some(g => dbUser.groups.includes(g));
+    // Approval is required even if user is an approver, as per requirements.
+    // const isApprover = section.approverGroups.some(g => dbUser.groups.includes(g));
 
-    if (reviewRequired && !isApprover) {
+    if (reviewRequired) {
         if (!page) {
              // Create page shell if it doesn't exist
              page = {

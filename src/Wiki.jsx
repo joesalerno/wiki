@@ -368,7 +368,194 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
   );
 }
 
-function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage, currentUser, users, onSwitchUser }) {
+function AdminPanel({ users, groups, sections, onUpdateUser, onCreateUser, onDeleteUser, onUpdateGroup, onCreateGroup, onDeleteGroup, onUpdateSection, onCreateSection, onDeleteSection, onClose }) {
+  const [tab, setTab] = useState('users');
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState({});
+
+  const resetForm = () => {
+    setEditingId(null);
+    setFormData({});
+  };
+
+  const handleSave = async () => {
+    try {
+      if (tab === 'users') {
+        if (editingId && editingId !== 'new') {
+           await onUpdateUser(editingId, { ...formData });
+        } else {
+           await onCreateUser({ ...formData });
+        }
+      } else if (tab === 'groups') {
+        if (editingId && editingId !== 'new') {
+           await onUpdateGroup(editingId, { ...formData });
+        } else {
+           await onCreateGroup(formData.id, { ...formData });
+        }
+      } else if (tab === 'sections') {
+         if (editingId && editingId !== 'new') {
+           await onUpdateSection(editingId, { ...formData });
+        } else {
+           await onCreateSection(formData.id, { ...formData });
+        }
+      }
+      resetForm();
+    } catch(e) {
+      alert(e.message || e.error);
+    }
+  };
+
+  const renderUserForm = () => (
+    <div className="admin-form">
+      <h3>{editingId === 'new' ? 'New User' : 'Edit User'}</h3>
+      <div className="form-group">
+        <label>ID</label>
+        <input disabled={editingId !== 'new'} value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} />
+      </div>
+      <div className="form-group">
+        <label>Name</label>
+        <input value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+      </div>
+      <div className="form-group">
+        <label>Groups (comma separated)</label>
+        <input value={formData.groups ? formData.groups.join(',') : ''} onChange={e => setFormData({...formData, groups: e.target.value.split(',').map(s => s.trim())})} />
+      </div>
+      <div className="form-actions">
+        <button className="btn btn-primary" onClick={handleSave}>Save</button>
+        <button className="btn btn-secondary" onClick={resetForm}>Cancel</button>
+      </div>
+    </div>
+  );
+
+  const renderGroupForm = () => (
+    <div className="admin-form">
+      <h3>{editingId === 'new' ? 'New Group' : 'Edit Group'}</h3>
+      <div className="form-group">
+        <label>ID</label>
+        <input disabled={editingId !== 'new'} value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} />
+      </div>
+      <div className="form-group">
+        <label>Permissions (comma separated)</label>
+        <input value={formData.permissions ? formData.permissions.join(',') : ''} onChange={e => setFormData({...formData, permissions: e.target.value.split(',').map(s => s.trim())})} />
+      </div>
+      <div className="form-actions">
+        <button className="btn btn-primary" onClick={handleSave}>Save</button>
+        <button className="btn btn-secondary" onClick={resetForm}>Cancel</button>
+      </div>
+    </div>
+  );
+
+  const renderSectionForm = () => (
+     <div className="admin-form">
+      <h3>{editingId === 'new' ? 'New Section' : 'Edit Section'}</h3>
+      <div className="form-group">
+        <label>ID</label>
+        <input disabled={editingId !== 'new'} value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} />
+      </div>
+      <div className="form-group">
+        <label>Title</label>
+        <input value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} />
+      </div>
+      <div className="form-group">
+        <label>Review Required</label>
+        <input type="checkbox" checked={formData.reviewRequired || false} onChange={e => setFormData({...formData, reviewRequired: e.target.checked})} />
+      </div>
+       <div className="form-group">
+        <label>Read Groups</label>
+        <select multiple value={formData.readGroups || []} onChange={e => setFormData({...formData, readGroups: Array.from(e.target.selectedOptions, o => o.value)})} style={{height: '100px'}}>
+             {Object.keys(groups).map(g => <option key={g} value={g}>{g}</option>)}
+        </select>
+      </div>
+      <div className="form-group">
+        <label>Write Groups</label>
+         <select multiple value={formData.writeGroups || []} onChange={e => setFormData({...formData, writeGroups: Array.from(e.target.selectedOptions, o => o.value)})} style={{height: '100px'}}>
+             {Object.keys(groups).map(g => <option key={g} value={g}>{g}</option>)}
+        </select>
+      </div>
+       <div className="form-group">
+        <label>Approver Groups (Required to review)</label>
+         <select multiple value={formData.approverGroups || []} onChange={e => setFormData({...formData, approverGroups: Array.from(e.target.selectedOptions, o => o.value)})} style={{height: '100px'}}>
+             {Object.keys(groups).map(g => <option key={g} value={g}>{g}</option>)}
+        </select>
+      </div>
+
+      <div className="form-actions">
+        <button className="btn btn-primary" onClick={handleSave}>Save</button>
+        <button className="btn btn-secondary" onClick={resetForm}>Cancel</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="admin-panel">
+      <div className="admin-header">
+         <h2>Admin Panel</h2>
+         <button className="btn btn-secondary" onClick={onClose}>Close</button>
+      </div>
+      <div className="admin-tabs">
+        <button className={tab === 'users' ? 'active' : ''} onClick={() => { setTab('users'); resetForm(); }}>Users</button>
+        <button className={tab === 'groups' ? 'active' : ''} onClick={() => { setTab('groups'); resetForm(); }}>Groups</button>
+        <button className={tab === 'sections' ? 'active' : ''} onClick={() => { setTab('sections'); resetForm(); }}>Sections</button>
+      </div>
+      <div className="admin-content">
+        {editingId ? (
+            tab === 'users' ? renderUserForm() :
+            tab === 'groups' ? renderGroupForm() :
+            renderSectionForm()
+        ) : (
+            <>
+               <button className="btn btn-primary" style={{marginBottom: '1rem'}} onClick={() => { setEditingId('new'); setFormData({}); }}>
+                  New {tab.slice(0, -1)}
+               </button>
+               <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Details</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tab === 'users' && users.map(u => (
+                      <tr key={u.id}>
+                        <td>{u.id}</td>
+                        <td>{u.name} ({u.groups.join(', ')})</td>
+                        <td>
+                          <button className="btn btn-sm btn-secondary" onClick={() => { setEditingId(u.id); setFormData(u); }}>Edit</button>
+                          <button className="btn btn-sm btn-secondary" style={{color: 'red'}} onClick={() => onDeleteUser(u.id)}>Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {tab === 'groups' && Object.entries(groups).map(([id, g]) => (
+                       <tr key={id}>
+                        <td>{id}</td>
+                        <td>Permissions: {g.permissions.join(', ')}</td>
+                        <td>
+                          <button className="btn btn-sm btn-secondary" onClick={() => { setEditingId(id); setFormData({id, ...g}); }}>Edit</button>
+                          <button className="btn btn-sm btn-secondary" style={{color: 'red'}} onClick={() => onDeleteGroup(id)}>Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                     {tab === 'sections' && Object.values(sections).map(s => (
+                       <tr key={s.id}>
+                        <td>{s.id}</td>
+                        <td>{s.title} (Review: {s.reviewRequired ? 'Yes' : 'No'})</td>
+                        <td>
+                          <button className="btn btn-sm btn-secondary" onClick={() => { setEditingId(s.id); setFormData(s); }}>Edit</button>
+                          <button className="btn btn-sm btn-secondary" style={{color: 'red'}} onClick={() => onDeleteSection(s.id)}>Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+               </table>
+            </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage, currentUser, users, onSwitchUser, onOpenAdmin }) {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredPages = pages.filter(page =>
@@ -416,6 +603,11 @@ function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage,
         <div style={{marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280'}}>
           Access: {currentUser?.groups.join(', ')}
         </div>
+        {currentUser && currentUser.groups.includes('admin') && (
+            <button className="btn btn-sm btn-secondary" style={{marginTop: '0.5rem', width: '100%'}} onClick={onOpenAdmin}>
+                Admin Panel
+            </button>
+        )}
       </div>
 
       <input
@@ -478,11 +670,12 @@ export default function Wiki() {
   // State
   const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [groups, setGroups] = useState({});
   const [pages, setPages] = useState([]);
   const [sections, setSections] = useState({});
   const [currentPageSlug, setCurrentPageSlug] = useState('home');
   const [currentPageData, setCurrentPageData] = useState(null);
-  const [viewMode, setViewMode] = useState('read'); // read, edit, history, new
+  const [viewMode, setViewMode] = useState('read'); // read, edit, history, new, admin
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0); // Force update trigger
 
@@ -490,12 +683,14 @@ export default function Wiki() {
   useEffect(() => {
     const initData = async () => {
       await db.init();
-      const [loadedUsers, loadedPages, loadedSections] = await Promise.all([
+      const [loadedUsers, loadedPages, loadedSections, loadedGroups] = await Promise.all([
          db.getUsers(),
          db.getPages(),
-         db.getSections()
+         db.getSections(),
+         db.getGroups()
       ]);
       setUsers(loadedUsers);
+      setGroups(loadedGroups);
 
       let initialUser = currentUser;
       if (!initialUser) {
@@ -527,7 +722,7 @@ export default function Wiki() {
       }
     };
     loadPage();
-  }, [currentPageSlug, tick]);
+  }, [currentPageSlug, tick, currentUser]);
 
   const handleSwitchUser = (userId) => {
     const user = users.find(u => u.id === userId);
@@ -571,9 +766,28 @@ export default function Wiki() {
         currentUser={currentUser}
         users={users}
         onSwitchUser={handleSwitchUser}
+        onOpenAdmin={() => setViewMode('admin')}
       />
 
       <main className="wiki-main">
+        {viewMode === 'admin' && (
+            <AdminPanel
+                users={users}
+                groups={groups}
+                sections={sections}
+                onClose={() => setViewMode('read')}
+                onUpdateUser={async (id, data) => { await db.updateUser(id, data); setTick(t=>t+1); }}
+                onCreateUser={async (data) => { await db.createUser(data); setTick(t=>t+1); }}
+                onDeleteUser={async (id) => { if(window.confirm('Delete?')) { await db.deleteUser(id); setTick(t=>t+1); } }}
+                onUpdateGroup={async (id, data) => { await db.updateGroup(id, data); setTick(t=>t+1); }}
+                onCreateGroup={async (id, data) => { await db.createGroup(id, data); setTick(t=>t+1); }}
+                onDeleteGroup={async (id) => { if(window.confirm('Delete?')) { await db.deleteGroup(id); setTick(t=>t+1); } }}
+                onUpdateSection={async (id, data) => { await db.updateSection(id, data); setTick(t=>t+1); }}
+                onCreateSection={async (id, data) => { await db.createSection(id, data); setTick(t=>t+1); }}
+                onDeleteSection={async (id) => { if(window.confirm('Delete?')) { await db.deleteSection(id); setTick(t=>t+1); } }}
+            />
+        )}
+
         {viewMode === 'read' && currentPageData && (
           <PageViewer
             page={currentPageData}

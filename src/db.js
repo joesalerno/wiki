@@ -17,14 +17,110 @@ export const db = {
     return users.find(u => u.id === id);
   },
 
+  async createUser(user) {
+      const userId = localStorage.getItem('wiki_user_id') || 'u3';
+      const res = await fetch(`${API_URL}/users`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+          body: JSON.stringify(user)
+      });
+      if (!res.ok) throw await res.json();
+      return await res.json();
+  },
+
+  async updateUser(id, user) {
+      const userId = localStorage.getItem('wiki_user_id') || 'u3';
+      const res = await fetch(`${API_URL}/users/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+          body: JSON.stringify(user)
+      });
+      if (!res.ok) throw await res.json();
+      return await res.json();
+  },
+
+  async deleteUser(id) {
+      const userId = localStorage.getItem('wiki_user_id') || 'u3';
+      const res = await fetch(`${API_URL}/users/${id}`, {
+          method: 'DELETE',
+          headers: { 'X-User-ID': userId }
+      });
+      if (!res.ok) throw await res.json();
+      return await res.json();
+  },
+
   async getGroups() {
     const res = await fetch(`${API_URL}/groups`);
     return await res.json();
   },
 
+  async createGroup(id, groupData) {
+      const userId = localStorage.getItem('wiki_user_id') || 'u3';
+      const res = await fetch(`${API_URL}/groups`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+          body: JSON.stringify({ id, ...groupData })
+      });
+      if (!res.ok) throw await res.json();
+      return await res.json();
+  },
+
+  async updateGroup(id, groupData) {
+      const userId = localStorage.getItem('wiki_user_id') || 'u3';
+      const res = await fetch(`${API_URL}/groups/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+          body: JSON.stringify(groupData)
+      });
+      if (!res.ok) throw await res.json();
+      return await res.json();
+  },
+
+  async deleteGroup(id) {
+      const userId = localStorage.getItem('wiki_user_id') || 'u3';
+      const res = await fetch(`${API_URL}/groups/${id}`, {
+          method: 'DELETE',
+          headers: { 'X-User-ID': userId }
+      });
+      if (!res.ok) throw await res.json();
+      return await res.json();
+  },
+
   async getSections() {
     const res = await fetch(`${API_URL}/sections`);
     return await res.json();
+  },
+
+  async createSection(id, sectionData) {
+      const userId = localStorage.getItem('wiki_user_id') || 'u3';
+      const res = await fetch(`${API_URL}/sections`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+          body: JSON.stringify({ id, ...sectionData })
+      });
+      if (!res.ok) throw await res.json();
+      return await res.json();
+  },
+
+  async updateSection(id, sectionData) {
+      const userId = localStorage.getItem('wiki_user_id') || 'u3';
+      const res = await fetch(`${API_URL}/sections/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
+          body: JSON.stringify(sectionData)
+      });
+      if (!res.ok) throw await res.json();
+      return await res.json();
+  },
+
+  async deleteSection(id) {
+      const userId = localStorage.getItem('wiki_user_id') || 'u3';
+      const res = await fetch(`${API_URL}/sections/${id}`, {
+          method: 'DELETE',
+          headers: { 'X-User-ID': userId }
+      });
+      if (!res.ok) throw await res.json();
+      return await res.json();
   },
 
   async getPages() {
