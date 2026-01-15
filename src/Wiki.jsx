@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { db } from './db';
 import './Wiki.css';
 
 // --- Markdown Parser (Minimal) ---
@@ -265,15 +264,15 @@ const computeDiff = (oldText, newText) => {
   return output;
 };
 
-function PageHistory({ page, onBack, onRevert, canRevert }) {
+function PageHistory({ page, onBack, onRevert, canRevert, onFetchHistory }) {
   const [revisions, setRevisions] = useState([]);
   const [expandedView, setExpandedView] = useState({ version: null, mode: null }); // mode: 'diff' | 'full'
 
   useEffect(() => {
-    if (page) {
-      db.getHistory(page.slug).then(setRevisions);
+    if (page && onFetchHistory) {
+      onFetchHistory(page.slug).then(setRevisions);
     }
-  }, [page]);
+  }, [page, onFetchHistory]);
 
   if (!page) return null;
 
@@ -381,12 +380,12 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
   );
 }
 
-function AdminPanel({ users, groups, sections, onUpdate, onClose }) {
-    const [tab, setTab] = useState('users'); // users, groups, sections
+function AdminPanel({ groups, sections, onSaveSection, onDeleteSection, onClose }) {
+    // Only 'sections' tab now
     const [editingId, setEditingId] = useState(null);
     const [formData, setFormData] = useState({});
 
-    // Reset form when switching tabs or editing
+    // Reset form when editing
     const startEdit = (id, data) => {
         setEditingId(id);
         setFormData(data ? { ...data } : {});
@@ -394,26 +393,11 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose }) {
 
     const handleSave = async () => {
         try {
-            if (tab === 'users') {
-                if (editingId === 'new') {
-                    await db.createUser(formData);
-                } else {
-                    await db.updateUser(editingId, formData);
-                }
-            } else if (tab === 'groups') {
-                 if (editingId === 'new') {
-                    await db.createGroup(formData.id, formData);
-                } else {
-                    await db.updateGroup(editingId, formData);
-                }
-            } else if (tab === 'sections') {
-                 if (editingId === 'new') {
-                    await db.createSection(formData.id, formData);
-                } else {
-                    await db.updateSection(editingId, formData);
-                }
+            if (editingId === 'new') {
+                await onSaveSection({ id: formData.id, ...formData });
+            } else {
+                await onSaveSection({ ...formData, id: editingId });
             }
-            onUpdate();
             setEditingId(null);
         } catch (e) {
             alert(e.message);
@@ -423,39 +407,11 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose }) {
     const handleDelete = async (id) => {
         if (!window.confirm("Are you sure?")) return;
         try {
-            if (tab === 'users') await db.deleteUser(id);
-            if (tab === 'groups') await db.deleteGroup(id);
-            if (tab === 'sections') await db.deleteSection(id);
-            onUpdate();
+            await onDeleteSection(id);
         } catch (e) {
             alert(e.message);
         }
     };
-
-    const renderUserForm = () => (
-        <div className="admin-form">
-            <input type="text" placeholder="ID (e.g. u4)" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={editingId !== 'new'} />
-            <input type="text" placeholder="Name" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
-            <div style={{fontSize: '0.9rem', marginBottom: '0.5rem'}}>Groups (comma separated):</div>
-            <input type="text" placeholder="admin, editor" value={formData.groups ? formData.groups.join(', ') : ''} onChange={e => setFormData({...formData, groups: e.target.value.split(',').map(s => s.trim()).filter(Boolean)})} />
-            <div className="admin-actions">
-                <button className="btn btn-sm btn-primary" onClick={handleSave}>Save</button>
-                <button className="btn btn-sm btn-secondary" onClick={() => setEditingId(null)}>Cancel</button>
-            </div>
-        </div>
-    );
-
-    const renderGroupForm = () => (
-        <div className="admin-form">
-            <input type="text" placeholder="ID (e.g. moderator)" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={editingId !== 'new'} />
-            <div style={{fontSize: '0.9rem', marginBottom: '0.5rem'}}>Permissions (comma separated):</div>
-            <input type="text" placeholder="read, write" value={formData.permissions ? formData.permissions.join(', ') : ''} onChange={e => setFormData({...formData, permissions: e.target.value.split(',').map(s => s.trim()).filter(Boolean)})} />
-             <div className="admin-actions">
-                <button className="btn btn-sm btn-primary" onClick={handleSave}>Save</button>
-                <button className="btn btn-sm btn-secondary" onClick={() => setEditingId(null)}>Cancel</button>
-            </div>
-        </div>
-    );
 
     const renderSectionForm = () => (
         <div className="admin-form">
@@ -495,43 +451,21 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose }) {
         <div className="wiki-article">
             <div className="wiki-content-area">
                 <div className="wiki-header">
-                    <h1 className="wiki-header-title">Admin Panel</h1>
+                    <h1 className="wiki-header-title">Section Management</h1>
                     <button className="btn btn-sm btn-secondary" onClick={onClose}>Close</button>
-                </div>
-
-                <div style={{display: 'flex', gap: '1rem', borderBottom: '1px solid #e5e7eb', marginBottom: '1rem'}}>
-                    {['users', 'groups', 'sections'].map(t => (
-                        <button
-                            key={t}
-                            onClick={() => { setTab(t); setEditingId(null); }}
-                            style={{
-                                padding: '0.5rem 1rem',
-                                border: 'none',
-                                background: 'none',
-                                borderBottom: tab === t ? '2px solid #2563eb' : '2px solid transparent',
-                                fontWeight: tab === t ? 600 : 400,
-                                textTransform: 'capitalize',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            {t}
-                        </button>
-                    ))}
                 </div>
 
                 {!editingId && (
                      <div style={{marginBottom: '1rem'}}>
                         <button className="btn btn-sm btn-primary" onClick={() => startEdit('new', {})}>
-                            + Create New {tab.slice(0, -1)}
+                            + Create New Section
                         </button>
                      </div>
                 )}
 
                 {editingId ? (
                     <div style={{maxWidth: '500px'}}>
-                        {tab === 'users' && renderUserForm()}
-                        {tab === 'groups' && renderGroupForm()}
-                        {tab === 'sections' && renderSectionForm()}
+                        {renderSectionForm()}
                     </div>
                 ) : (
                     <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem'}}>
@@ -543,32 +477,7 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {tab === 'users' && users.map(u => (
-                                <tr key={u.id} style={{borderBottom: '1px solid #f3f4f6'}}>
-                                    <td style={{padding: '0.5rem'}}>{u.id}</td>
-                                    <td style={{padding: '0.5rem'}}>
-                                        <div><strong>{u.name}</strong></div>
-                                        <div style={{color: '#6b7280', fontSize: '0.8rem'}}>{u.groups.join(', ')}</div>
-                                    </td>
-                                    <td style={{padding: '0.5rem'}}>
-                                        <button className="btn-text" onClick={() => startEdit(u.id, u)}>Edit</button>
-                                        <button className="btn-text" style={{color: '#dc2626', marginLeft: '0.5rem'}} onClick={() => handleDelete(u.id)}>Delete</button>
-                                    </td>
-                                </tr>
-                            ))}
-                             {tab === 'groups' && Object.keys(groups).map(gid => (
-                                <tr key={gid} style={{borderBottom: '1px solid #f3f4f6'}}>
-                                    <td style={{padding: '0.5rem'}}>{gid}</td>
-                                    <td style={{padding: '0.5rem'}}>
-                                        <div style={{color: '#6b7280', fontSize: '0.8rem'}}>{groups[gid]?.permissions?.join(', ')}</div>
-                                    </td>
-                                    <td style={{padding: '0.5rem'}}>
-                                        <button className="btn-text" onClick={() => startEdit(gid, {id: gid, ...groups[gid]})}>Edit</button>
-                                        <button className="btn-text" style={{color: '#dc2626', marginLeft: '0.5rem'}} onClick={() => handleDelete(gid)}>Delete</button>
-                                    </td>
-                                </tr>
-                            ))}
-                             {tab === 'sections' && Object.values(sections).map(s => (
+                             {Object.values(sections).map(s => (
                                 <tr key={s.id} style={{borderBottom: '1px solid #f3f4f6'}}>
                                     <td style={{padding: '0.5rem'}}>{s.id}</td>
                                     <td style={{padding: '0.5rem'}}>
@@ -593,7 +502,7 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose }) {
     );
 }
 
-function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage, currentUser, users, onSwitchUser, onOpenAdmin }) {
+function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage, currentUser, onOpenAdmin }) {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredPages = pages.filter(page =>
@@ -629,17 +538,10 @@ function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage,
 
       <div className="user-panel">
         <label style={{display: 'block', fontSize: '0.8rem', color: '#6b7280', marginBottom: '0.5rem'}}>Signed in as</label>
-        <select
-          className="user-select"
-          value={currentUser?.id || ''}
-          onChange={(e) => onSwitchUser(e.target.value)}
-        >
-          {users.map(u => (
-            <option key={u.id} value={u.id}>{u.name}</option>
-          ))}
-        </select>
+        <div style={{fontWeight: 'bold', fontSize: '0.9rem'}}>{currentUser?.name || 'Guest'}</div>
+
         <div style={{marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-          <span>Access: {currentUser?.groups.join(', ')}</span>
+          <span>Access: {currentUser?.groups.join(', ') || 'None'}</span>
           {currentUser?.groups.includes('admin') && (
               <button className="btn-text" style={{fontSize: '0.75rem', color: '#2563eb', fontWeight: 600}} onClick={onOpenAdmin}>Admin</button>
           )}
@@ -702,71 +604,60 @@ function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage,
 
 // --- Main Wiki Component ---
 
-export default function Wiki() {
+export default function Wiki({
+  currentUser,
+  pages = [],
+  sections = {},
+  groups = {}, // Used for section editing
+
+  onFetchPage, // (slug) => Promise<Page>
+  onSavePage,  // (slug, title, content, sectionId) => Promise<Result>
+
+  onFetchHistory, // (slug) => Promise<Revisions[]>
+  onRevert, // (slug, version) => Promise<Result>
+
+  onApprove, // (slug, index) => Promise<Result>
+  onReject,  // (slug, index) => Promise<Result>
+
+  onSaveSection, // (section) => Promise<void>
+  onDeleteSection // (id) => Promise<void>
+}) {
   // State
-  const [users, setUsers] = useState([]);
-  const [groups, setGroups] = useState({});
-  const [currentUser, setCurrentUser] = useState(null);
-  const [pages, setPages] = useState([]);
-  const [sections, setSections] = useState({});
-  const [currentPageSlug, setCurrentPageSlug] = useState('home');
+  const [currentPageSlug, setCurrentPageSlug] = useState(null);
   const [currentPageData, setCurrentPageData] = useState(null);
   const [viewMode, setViewMode] = useState('read'); // read, edit, history, new, admin
-  const [loading, setLoading] = useState(true);
-  const [tick, setTick] = useState(0); // Force update trigger
 
-  // Load Initial Data
+  // Update Current Page Data when slug changes or re-fetched needs to happen
   useEffect(() => {
-    const initData = async () => {
-      await db.init();
-      const [loadedUsers, loadedGroups, loadedPages, loadedSections] = await Promise.all([
-         db.getUsers(),
-         db.getGroups(),
-         db.getPages(),
-         db.getSections()
-      ]);
-      setUsers(loadedUsers);
-      setGroups(loadedGroups);
-
-      let initialUser = currentUser;
-      if (!initialUser) {
-          const storedId = localStorage.getItem('wiki_user_id');
-          if (storedId) initialUser = loadedUsers.find(u => u.id === storedId);
-      }
-      if (!initialUser) initialUser = loadedUsers[0];
-
-      if (initialUser && (!currentUser || currentUser.id !== initialUser.id)) {
-          setCurrentUser(initialUser);
-          localStorage.setItem('wiki_user_id', initialUser.id);
-      }
-
-      setPages(loadedPages);
-      setSections(loadedSections);
-      setLoading(false);
-    };
-    initData();
-  }, [tick]); // Reload all data on tick
-
-  // Update Current Page Data when dependencies change
-  useEffect(() => {
+    let isMounted = true;
     const loadPage = async () => {
-      if (currentPageSlug) {
-          const page = await db.getPage(currentPageSlug);
-          setCurrentPageData(page);
+      if (currentPageSlug && onFetchPage) {
+          const page = await onFetchPage(currentPageSlug);
+          if (isMounted) setCurrentPageData(page);
       } else {
-          setCurrentPageData(null);
+          if (isMounted) setCurrentPageData(null);
       }
     };
     loadPage();
-  }, [currentPageSlug, tick]);
+    return () => { isMounted = false; };
+  }, [currentPageSlug, onFetchPage, pages]); // Depends on 'pages' to trigger reload if list updates (implying data update)
+  // Note: Depending on 'pages' might be too aggressive if 'pages' changes often, but it's a simple way to sync.
+  // Better would be if parent triggers a refresh, but here we rely on parent updating 'pages' prop or we can just refetch when we know we saved.
+  // Actually, 'pages' prop update won't necessarily mean the *current page content* changed, but in this simple architecture it often signals a state change.
+  // A cleaner way is if the parent passes a 'version' prop or similar, or we just rely on the user actions (save) to update local state via the promise result.
 
-  const handleSwitchUser = (userId) => {
-    const user = users.find(u => u.id === userId);
-    if (user) {
-        setCurrentUser(user);
-        localStorage.setItem('wiki_user_id', userId);
-        setTick(t => t + 1); // Refresh data with new user permissions
-    }
+  // However, if we Edit -> Save -> Parent Updates Pages List -> We want to see new content.
+  // We need to re-fetch the page content.
+  // We can add a simple counter or just rely on the fact that when we perform an action, we can re-fetch.
+
+  // Let's refine:
+  // When we Save, we await result, then we can re-fetch `currentPageSlug`.
+
+  const refreshCurrentPage = async () => {
+      if (currentPageSlug && onFetchPage) {
+          const page = await onFetchPage(currentPageSlug);
+          setCurrentPageData(page);
+      }
   };
 
   const handleSelectPage = (slug) => {
@@ -784,12 +675,10 @@ export default function Wiki() {
   const currentSection = currentPageData ? sections[currentPageData.sectionId] : null;
   const canEdit = currentUser && currentSection
       ? currentSection.writeGroups.some(g => currentUser.groups.includes(g))
-      : false; // If new page, we check in save/create logic, but button shouldn't show if no page.
+      : false;
 
   // For delete/revert, we restrict to admin for now, or match server logic
   const canDelete = currentUser && currentUser.groups.includes('admin');
-
-  if (loading) return <div className="wiki-container">Loading...</div>;
 
   return (
     <div className="wiki-container">
@@ -800,18 +689,16 @@ export default function Wiki() {
         onSelectPage={handleSelectPage}
         onCreatePage={handleCreatePage}
         currentUser={currentUser}
-        users={users}
-        onSwitchUser={handleSwitchUser}
         onOpenAdmin={() => setViewMode('admin')}
       />
 
       <main className="wiki-main">
         {viewMode === 'admin' && (
             <AdminPanel
-                users={users}
                 groups={groups}
                 sections={sections}
-                onUpdate={() => setTick(t => t + 1)}
+                onSaveSection={onSaveSection}
+                onDeleteSection={onDeleteSection}
                 onClose={() => setViewMode('read')}
             />
         )}
@@ -828,16 +715,16 @@ export default function Wiki() {
             onApprove={async (index) => {
                if(window.confirm("Approve this revision?")) {
                   try {
-                      await db.approveRevision(currentPageData.slug, index, currentUser);
-                      setTick(t => t + 1);
+                      await onApprove(currentPageData.slug, index);
+                      await refreshCurrentPage();
                   } catch(e) { alert(e.message); }
                }
             }}
             onReject={async (index) => {
                if(window.confirm("Reject this revision?")) {
                    try {
-                       await db.rejectRevision(currentPageData.slug, index, currentUser);
-                       setTick(t => t + 1);
+                       await onReject(currentPageData.slug, index);
+                       await refreshCurrentPage();
                    } catch(e) { alert(e.message); }
                }
             }}
@@ -861,11 +748,11 @@ export default function Wiki() {
             onCancel={() => setViewMode('read')}
             onSave={async (title, content, sectionId) => {
               try {
-                const res = await db.savePage(currentPageData.slug, title, content, currentUser, sectionId);
+                const res = await onSavePage(currentPageData.slug, title, content, sectionId);
                 if (res.status === 'pending') {
                     alert("Changes submitted for review.");
                 }
-                setTick(t => t + 1); // Trigger data refresh
+                await refreshCurrentPage();
                 setViewMode('read');
               } catch (e) {
                 alert(e.message);
@@ -885,17 +772,18 @@ export default function Wiki() {
             onSave={async (title, content, sectionId) => {
               const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
               if (!slug) return alert("Please enter a valid title");
-              const exists = await db.getPage(slug);
-              if (exists) return alert("Page already exists");
+
+              // We could check if page exists via onFetchPage(slug) or let onSavePage handle it
+              // onSavePage will likely fail if it's a create but we treat everything as save/upsert usually
+              // But db.savePage acts as upsert.
 
               try {
-                const res = await db.savePage(slug, title, content, currentUser, sectionId);
+                const res = await onSavePage(slug, title, content, sectionId);
                  if (res.status === 'pending') {
                     alert("Page submitted for review.");
-                    // Go to home or stay?
                 }
-                setCurrentPageSlug(slug);
-                setTick(t => t + 1);
+                setCurrentPageSlug(slug); // This will trigger useEffect to load the page
+                // We don't need explicit refreshCurrentPage because setting slug triggers effect
                 setViewMode('read');
               } catch (e) {
                  alert(e.message);
@@ -909,10 +797,11 @@ export default function Wiki() {
             page={currentPageData}
             onBack={() => setViewMode('read')}
             canRevert={canDelete}
+            onFetchHistory={onFetchHistory}
             onRevert={async (version) => {
                if(window.confirm(`Are you sure you want to revert to version ${version}?`)) {
-                 await db.revert(currentPageData.slug, version, currentUser);
-                 setTick(t => t + 1);
+                 await onRevert(currentPageData.slug, version);
+                 await refreshCurrentPage();
                  setViewMode('read');
                }
             }}
