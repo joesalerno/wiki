@@ -44,7 +44,7 @@ const SEED_DATA = {
       revisions: [
         {
           version: 1,
-          content: "# Welcome to React Wiki\n\nThis is a minimal, dependency-free Wiki component.\n\n*   Secure\n*   Versioned\n*   Fast\n\nTry editing this page!",
+          content: "# Welcome to the Wiki\n\nBuild shared knowledge with clarity and confidence. This wiki includes fast search, clean version history, and smart permissions.\n\n## Get started\n\n*   Read the latest updates\n*   Edit a page to propose changes\n*   Review and approve updates when needed\n\nTip: Try editing this page to create your first revision!",
           authorId: 'u1',
           timestamp: Date.now()
         }
@@ -195,13 +195,8 @@ export const dbController = {
 
   async getPages(user) {
     const data = await loadData();
-    // If no user provided, return nothing or public only?
-    // Assuming viewer group is minimum. If no user, maybe we shouldn't return anything or just public?
-    // Let's assume user is required for now as per frontend flow.
-    // If user is null/undefined, treat as anonymous (no groups).
-
+    // If no user provided, return nothing
     const userGroups = user ? (data.users.find(u => u.id === user.id)?.groups || []) : [];
-
     return Object.values(data.pages).filter(p => {
        const section = data.sections[p.sectionId || 'general'];
        return section && section.readGroups.some(g => userGroups.includes(g));
@@ -221,10 +216,8 @@ export const dbController = {
     const data = await loadData();
     const page = data.pages[slug];
     if (!page) return null;
-
     const userGroups = user ? (data.users.find(u => u.id === user.id)?.groups || []) : [];
     const section = data.sections[page.sectionId || 'general'];
-
     if (!section || !section.readGroups.some(g => userGroups.includes(g))) {
         // Permission denied (or not found to hide existence if strictly secure, but 403 is better for now)
         throw new Error("Permission denied");

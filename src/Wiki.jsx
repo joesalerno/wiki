@@ -60,8 +60,8 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
               <button className="btn btn-minimal" onClick={onHistory} title="View History">
                  <span style={{fontSize: '1.2rem', marginRight: '0.25rem'}}>↺</span> History
               </button>
-              {canEdit && (
-                <button className="btn btn-sm btn-primary" onClick={onEdit}>Edit Page</button>
+              {(
+                <button title={canEdit ? "Edit Page" : "You do not have permission to edit this page"}  disabled={!canEdit} className="btn btn-sm btn-primary" onClick={onEdit} style={{ cursor: canEdit ? 'pointer' : 'not-allowed', backgroundColor: canEdit ? 'inherit' : '#6b7280' }}>Edit Page</button>
               )}
            </div>
         </div>

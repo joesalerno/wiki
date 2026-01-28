@@ -87,7 +87,7 @@
       "revisions": [
         {
           "version": 1,
-          "content": "# Welcome to React Wiki\n\nThis is a minimal, dependency-free Wiki component.\n\n*   Secure\n*   Versioned\n*   Fast\n\nTry editing this page!",
+          "content": "# Welcome to the Wiki\n\nBuild shared knowledge with clarity and confidence. This wiki includes fast search, clean version history, and smart permissions.\n\n## Get started\n\n*   Read the latest updates\n*   Edit a page to propose changes\n*   Review and approve updates when needed\n\nTip: Try editing this page to create your first revision!",
           "authorId": "u1",
           "timestamp": 1767042017125
         }
