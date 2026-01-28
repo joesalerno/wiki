@@ -3,78 +3,51 @@
     {
       "id": "u1",
       "name": "Alice (Admin)",
-      "groups": [
-        "admin"
-      ]
+      "isAdmin": true
     },
     {
       "id": "u2",
       "name": "Bob (Editor)",
-      "groups": [
-        "editor"
-      ]
+      "isAdmin": false
     },
     {
       "id": "u3",
       "name": "Charlie (Viewer)",
-      "groups": [
-        "viewer"
-      ]
+      "isAdmin": false
     }
   ],
-  "groups": {
-    "admin": {
-      "permissions": [
-        "read",
-        "write",
-        "delete",
-        "manage"
-      ]
-    },
-    "editor": {
-      "permissions": [
-        "read",
-        "write"
-      ]
-    },
-    "viewer": {
-      "permissions": [
-        "read"
-      ]
-    }
-  },
   "sections": {
     "general": {
       "id": "general",
       "title": "General",
-      "readGroups": [
-        "viewer",
-        "editor",
-        "admin"
+      "readUsers": [
+        "u1",
+        "u2",
+        "u3"
       ],
-      "writeGroups": [
-        "editor",
-        "admin"
+      "writeUsers": [
+        "u1",
+        "u2"
       ],
       "reviewRequired": false,
-      "approverGroups": [
-        "admin"
+      "approverUsers": [
+        "u1"
       ]
     },
     "restricted": {
       "id": "restricted",
       "title": "Restricted Area",
-      "readGroups": [
-        "editor",
-        "admin"
+      "readUsers": [
+        "u1",
+        "u2"
       ],
-      "writeGroups": [
-        "editor",
-        "admin"
+      "writeUsers": [
+        "u1",
+        "u2"
       ],
       "reviewRequired": true,
-      "approverGroups": [
-        "admin"
+      "approverUsers": [
+        "u1"
       ]
     }
   },

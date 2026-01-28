@@ -1,234 +1,328 @@
 
-const API_URL = 'http://localhost:3001/api';
+const API_URL = 'http://localhost:3001/graphql';
+
+const gqlRequest = async (query, variables = {}, userId) => {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(userId ? { 'X-User-ID': userId } : {})
+    },
+    body: JSON.stringify({ query, variables })
+  });
+
+  const payload = await res.json();
+  if (!res.ok || payload.errors) {
+    const message = payload.errors?.[0]?.message || 'Request failed';
+    throw new Error(message);
+  }
+  return payload.data;
+};
+
+const getCurrentUserId = () => localStorage.getItem('wiki_user_id') || 'u3';
 
 export const db = {
-  // Init is now just a placeholder or could check server health, but we'll leave it simple
-  async init() {
-  },
-
   async getUsers() {
-    const res = await fetch(`${API_URL}/users`);
-    return await res.json();
-  },
-
-  async getUser(id) {
-    // We don't have a specific endpoint but we can fetch all or just filter client side for now to match old API
-    const users = await this.getUsers();
-    return users.find(u => u.id === id);
-  },
-
-  async getGroups() {
-    const res = await fetch(`${API_URL}/groups`);
-    return await res.json();
-  },
-
-  async createGroup(id, data) {
-    const userId = localStorage.getItem('wiki_user_id') || 'u3';
-    const res = await fetch(`${API_URL}/groups`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
-        body: JSON.stringify({ id, ...data })
-    });
-    if(!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to create group");
-    }
-    return await res.json();
-  },
-
-  async updateGroup(id, data) {
-    const userId = localStorage.getItem('wiki_user_id') || 'u3';
-    const res = await fetch(`${API_URL}/groups/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
-        body: JSON.stringify(data)
-    });
-    if(!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to update group");
-    }
-    return await res.json();
-  },
-
-  async deleteGroup(id) {
-    const userId = localStorage.getItem('wiki_user_id') || 'u3';
-    const res = await fetch(`${API_URL}/groups/${id}`, {
-        method: 'DELETE',
-        headers: { 'X-User-ID': userId }
-    });
-    if(!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to delete group");
-    }
-    return await res.json();
+    const data = await gqlRequest(
+      `query {
+        users { id name isAdmin }
+      }`
+    );
+    return data.users;
   },
 
   async getSections() {
-    const res = await fetch(`${API_URL}/sections`);
-    return await res.json();
+    const data = await gqlRequest(
+      `query {
+        sections {
+          id
+          title
+          readUsers
+          writeUsers
+          approverUsers
+          reviewRequired
+        }
+      }`
+    );
+    return data.sections;
   },
 
   async createSection(id, data) {
-    const userId = localStorage.getItem('wiki_user_id') || 'u3';
-    const res = await fetch(`${API_URL}/sections`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
-        body: JSON.stringify({ id, ...data })
-    });
-    if(!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to create section");
-    }
-    return await res.json();
+    const userId = getCurrentUserId();
+    const result = await gqlRequest(
+      `mutation CreateSection($id: ID!, $input: SectionInput!, $userId: ID) {
+        createSection(id: $id, input: $input, userId: $userId) {
+          id
+          title
+          readUsers
+          writeUsers
+          approverUsers
+          reviewRequired
+        }
+      }`,
+      { id, input: data, userId }
+    );
+    return result.createSection;
   },
 
   async updateSection(id, data) {
-    const userId = localStorage.getItem('wiki_user_id') || 'u3';
-    const res = await fetch(`${API_URL}/sections/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
-        body: JSON.stringify(data)
-    });
-    if(!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to update section");
-    }
-    return await res.json();
+    const userId = getCurrentUserId();
+    const result = await gqlRequest(
+      `mutation UpdateSection($id: ID!, $input: SectionInput!, $userId: ID) {
+        updateSection(id: $id, input: $input, userId: $userId) {
+          id
+          title
+          readUsers
+          writeUsers
+          approverUsers
+          reviewRequired
+        }
+      }`,
+      { id, input: data, userId }
+    );
+    return result.updateSection;
   },
 
   async deleteSection(id) {
-    const userId = localStorage.getItem('wiki_user_id') || 'u3';
-    const res = await fetch(`${API_URL}/sections/${id}`, {
-        method: 'DELETE',
-        headers: { 'X-User-ID': userId }
-    });
-    if(!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to delete section");
-    }
-    return await res.json();
-  },
-
-  async createUser(user) {
-    const userId = localStorage.getItem('wiki_user_id') || 'u3';
-    const res = await fetch(`${API_URL}/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
-        body: JSON.stringify(user)
-    });
-    if(!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to create user");
-    }
-    return await res.json();
-  },
-
-  async updateUser(id, data) {
-    const userId = localStorage.getItem('wiki_user_id') || 'u3';
-    const res = await fetch(`${API_URL}/users/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': userId },
-        body: JSON.stringify(data)
-    });
-    if(!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to update user");
-    }
-    return await res.json();
-  },
-
-  async deleteUser(id) {
-    const userId = localStorage.getItem('wiki_user_id') || 'u3';
-    const res = await fetch(`${API_URL}/users/${id}`, {
-        method: 'DELETE',
-        headers: { 'X-User-ID': userId }
-    });
-    if(!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to delete user");
-    }
-    return await res.json();
+    const userId = getCurrentUserId();
+    const result = await gqlRequest(
+      `mutation DeleteSection($id: ID!, $userId: ID) {
+        deleteSection(id: $id, userId: $userId)
+      }`,
+      { id, userId }
+    );
+    return result.deleteSection;
   },
 
   async getPages() {
-    // We need to send user ID.
-    // In a real app we'd have a token. Here we rely on localStorage or similar,
-    // but the `Wiki` component manages `currentUser` state.
-    // We can't easily access React state from here without passing it.
-    // The previous implementation of `getPages` didn't take args.
-    // This is a refactoring challenge.
-
-    // Simplest solution for this task:
-    // We store the selected user ID in localStorage whenever it changes in Wiki.jsx,
-    // and read it here.
-    const userId = localStorage.getItem('wiki_user_id') || 'u3'; // Default to viewer
-    const res = await fetch(`${API_URL}/pages`, {
-        headers: { 'X-User-ID': userId }
-    });
-    return await res.json();
+    const userId = getCurrentUserId();
+    const data = await gqlRequest(
+      `query Pages($userId: ID) {
+        pages(userId: $userId) {
+          slug
+          title
+          sectionId
+          updatedAt
+          authorId
+        }
+      }`,
+      { userId },
+      userId
+    );
+    return data.pages;
   },
 
   async getPage(slug) {
-    const userId = localStorage.getItem('wiki_user_id') || 'u3';
-    const res = await fetch(`${API_URL}/pages/${slug}`, {
-        headers: { 'X-User-ID': userId }
-    });
-    if (!res.ok) return null;
-    return await res.json();
+    const userId = getCurrentUserId();
+    const data = await gqlRequest(
+      `query Page($slug: ID!, $userId: ID) {
+        page(slug: $slug, userId: $userId) {
+          id
+          slug
+          title
+          sectionId
+          revisions {
+            version
+            content
+            authorId
+            timestamp
+            approvedBy
+            approvedAt
+          }
+          pendingRevisions {
+            content
+            title
+            authorId
+            timestamp
+            sectionId
+          }
+          currentRevision {
+            version
+            content
+            authorId
+            timestamp
+            approvedBy
+            approvedAt
+          }
+        }
+      }`,
+      { slug, userId },
+      userId
+    );
+    return data.page;
   },
 
-  async savePage(slug, title, content, user, sectionId) {
-    const res = await fetch(`${API_URL}/pages/${slug}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, content, user, sectionId })
-    });
-    if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to save');
-    }
-    return await res.json();
+  async savePage(slug, title, content, userId, sectionId) {
+    const data = await gqlRequest(
+      `mutation SavePage($slug: ID!, $title: String!, $content: String!, $userId: ID!, $sectionId: ID) {
+        savePage(slug: $slug, title: $title, content: $content, userId: $userId, sectionId: $sectionId) {
+          id
+          slug
+          title
+          sectionId
+          status
+          revisions {
+            version
+            content
+            authorId
+            timestamp
+            approvedBy
+            approvedAt
+          }
+          pendingRevisions {
+            content
+            title
+            authorId
+            timestamp
+            sectionId
+          }
+          currentRevision {
+            version
+            content
+            authorId
+            timestamp
+            approvedBy
+            approvedAt
+          }
+        }
+      }`,
+      { slug, title, content, userId, sectionId },
+      userId
+    );
+    return data.savePage;
   },
 
-  async approveRevision(slug, index, user) {
-     const res = await fetch(`${API_URL}/pages/${slug}/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ index, user })
-    });
-    if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to approve');
-    }
-    return await res.json();
+  async approveRevision(slug, index, userId) {
+    const data = await gqlRequest(
+      `mutation ApproveRevision($slug: ID!, $index: Int!, $userId: ID!) {
+        approveRevision(slug: $slug, index: $index, userId: $userId) {
+          id
+          slug
+          title
+          sectionId
+          revisions {
+            version
+            content
+            authorId
+            timestamp
+            approvedBy
+            approvedAt
+          }
+          pendingRevisions {
+            content
+            title
+            authorId
+            timestamp
+            sectionId
+          }
+          currentRevision {
+            version
+            content
+            authorId
+            timestamp
+            approvedBy
+            approvedAt
+          }
+        }
+      }`,
+      { slug, index, userId },
+      userId
+    );
+    return data.approveRevision;
   },
 
-  async rejectRevision(slug, index, user) {
-     const res = await fetch(`${API_URL}/pages/${slug}/reject`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ index, user })
-    });
-    if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to reject');
-    }
-    return await res.json();
+  async rejectRevision(slug, index, userId) {
+    const data = await gqlRequest(
+      `mutation RejectRevision($slug: ID!, $index: Int!, $userId: ID!) {
+        rejectRevision(slug: $slug, index: $index, userId: $userId) {
+          id
+          slug
+          title
+          sectionId
+          revisions {
+            version
+            content
+            authorId
+            timestamp
+            approvedBy
+            approvedAt
+          }
+          pendingRevisions {
+            content
+            title
+            authorId
+            timestamp
+            sectionId
+          }
+          currentRevision {
+            version
+            content
+            authorId
+            timestamp
+            approvedBy
+            approvedAt
+          }
+        }
+      }`,
+      { slug, index, userId },
+      userId
+    );
+    return data.rejectRevision;
   },
 
   async getHistory(slug) {
-    const res = await fetch(`${API_URL}/pages/${slug}/history`);
-    if (!res.ok) return [];
-    return await res.json();
+    const data = await gqlRequest(
+      `query History($slug: ID!) {
+        history(slug: $slug) {
+          version
+          content
+          authorId
+          timestamp
+          approvedBy
+          approvedAt
+        }
+      }`,
+      { slug }
+    );
+    return data.history;
   },
 
-  async revert(slug, version, user) {
-     const res = await fetch(`${API_URL}/pages/${slug}/revert`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ version, user })
-    });
-    if (!res.ok) return null;
-    return await res.json();
+  async revert(slug, version, userId) {
+    const data = await gqlRequest(
+      `mutation Revert($slug: ID!, $version: Int!, $userId: ID!) {
+        revert(slug: $slug, version: $version, userId: $userId) {
+          id
+          slug
+          title
+          sectionId
+          revisions {
+            version
+            content
+            authorId
+            timestamp
+            approvedBy
+            approvedAt
+          }
+          pendingRevisions {
+            content
+            title
+            authorId
+            timestamp
+            sectionId
+          }
+          currentRevision {
+            version
+            content
+            authorId
+            timestamp
+            approvedBy
+            approvedAt
+          }
+        }
+      }`,
+      { slug, version, userId },
+      userId
+    );
+    return data.revert;
   }
 };

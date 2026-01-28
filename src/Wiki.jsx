@@ -61,7 +61,7 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
                  <span style={{fontSize: '1.2rem', marginRight: '0.25rem'}}>↺</span> History
               </button>
               {(
-                <button title={canEdit ? "Edit Page" : "You do not have permission to edit this page"}  disabled={!canEdit} className="btn btn-sm btn-primary" onClick={onEdit} style={{ cursor: canEdit ? 'pointer' : 'not-allowed', backgroundColor: canEdit ? 'inherit' : '#6b7280' }}>Edit Page</button>
+                <button title={canEdit ? "Edit Page" : "You do not have permission to edit this page"}  disabled={!canEdit} className="btn btn-sm btn-primary" onClick={onEdit} style={{ cursor: canEdit ? 'pointer' : 'not-allowed', backgroundColor: canEdit ? 'inherit' : '#6b7280', opacity: canEdit ? 1 : 0.5 }}>Edit Page</button>
               )}
            </div>
         </div>
@@ -381,216 +381,149 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
   );
 }
 
-function AdminPanel({ users, groups, sections, onUpdate, onClose }) {
-    const [tab, setTab] = useState('users'); // users, groups, sections
-    const [editingId, setEditingId] = useState(null);
-    const [formData, setFormData] = useState({});
+function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState({});
 
-    // Reset form when switching tabs or editing
     const startEdit = (id, data) => {
         setEditingId(id);
-        setFormData(data ? { ...data } : {});
-    };
-
-    const handleSave = async () => {
-        try {
-            if (tab === 'users') {
-                if (editingId === 'new') {
-                    await db.createUser(formData);
-                } else {
-                    await db.updateUser(editingId, formData);
-                }
-            } else if (tab === 'groups') {
-                 if (editingId === 'new') {
-                    await db.createGroup(formData.id, formData);
-                } else {
-                    await db.updateGroup(editingId, formData);
-                }
-            } else if (tab === 'sections') {
-                 if (editingId === 'new') {
-                    await db.createSection(formData.id, formData);
-                } else {
-                    await db.updateSection(editingId, formData);
-                }
-            }
-            onUpdate();
-            setEditingId(null);
-        } catch (e) {
-            alert(e.message);
+        if (id === 'new') {
+          setFormData({ id: '', title: '', readUsers: [], writeUsers: [], approverUsers: [], reviewRequired: false });
+          return;
         }
+        setFormData({
+          ...data,
+          readUsers: data?.readUsers || [],
+          writeUsers: data?.writeUsers || [],
+          approverUsers: data?.approverUsers || [],
+          reviewRequired: Boolean(data?.reviewRequired)
+        });
     };
 
-    const handleDelete = async (id) => {
-        if (!window.confirm("Are you sure?")) return;
-        try {
-            if (tab === 'users') await db.deleteUser(id);
-            if (tab === 'groups') await db.deleteGroup(id);
-            if (tab === 'sections') await db.deleteSection(id);
-            onUpdate();
-        } catch (e) {
-            alert(e.message);
-        }
-    };
+  const handleSave = async () => {
+    try {
+      if (editingId === 'new') {
+        await db.createSection(formData.id, formData);
+      } else {
+        await db.updateSection(editingId, formData);
+      }
+      onUpdate();
+      setEditingId(null);
+    } catch (e) {
+      alert(e.message);
+    }
+  };
 
-    const renderUserForm = () => (
-        <div className="admin-form">
-            <input type="text" placeholder="ID (e.g. u4)" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={editingId !== 'new'} />
-            <input type="text" placeholder="Name" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
-            <div style={{fontSize: '0.9rem', marginBottom: '0.5rem'}}>Groups (comma separated):</div>
-            <input type="text" placeholder="admin, editor" value={formData.groups ? formData.groups.join(', ') : ''} onChange={e => setFormData({...formData, groups: e.target.value.split(',').map(s => s.trim()).filter(Boolean)})} />
-            <div className="admin-actions">
-                <button className="btn btn-sm btn-primary" onClick={handleSave}>Save</button>
-                <button className="btn btn-sm btn-secondary" onClick={() => setEditingId(null)}>Cancel</button>
-            </div>
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure?")) return;
+    try {
+      await db.deleteSection(id);
+      onUpdate();
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const renderSectionForm = () => (
+    <div className="admin-form">
+       <input type="text" placeholder="ID (e.g. news)" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={editingId !== 'new'} />
+       <input type="text" placeholder="Title" value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} />
+
+       <label>Read Users:</label>
+       <select multiple style={{width: '100%', height: '80px'}} value={formData.readUsers || []} onChange={e => setFormData({...formData, readUsers: Array.from(e.target.selectedOptions, o => o.value)})}>
+         {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+       </select>
+
+       <label>Write Users:</label>
+       <select multiple style={{width: '100%', height: '80px'}} value={formData.writeUsers || []} onChange={e => setFormData({...formData, writeUsers: Array.from(e.target.selectedOptions, o => o.value)})}>
+         {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+       </select>
+
+       <div style={{margin: '0.5rem 0'}}>
+        <label>
+          <input type="checkbox" checked={formData.reviewRequired || false} onChange={e => setFormData({...formData, reviewRequired: e.target.checked})} />
+          Review Required
+        </label>
+       </div>
+
+       <label>Approver Users:</label>
+       <select multiple style={{width: '100%', height: '80px'}} value={formData.approverUsers || []} onChange={e => setFormData({...formData, approverUsers: Array.from(e.target.selectedOptions, o => o.value)})}>
+         {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+       </select>
+
+       <div className="admin-actions" style={{marginTop: '1rem'}}>
+        <button className="btn btn-sm btn-primary" onClick={handleSave}>Save</button>
+        <button className="btn btn-sm btn-secondary" onClick={() => setEditingId(null)}>Cancel</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="wiki-article">
+      <div className="wiki-content-area">
+        <div className="wiki-header">
+          <h1 className="wiki-header-title">Section Management</h1>
+          <button className="btn btn-sm btn-secondary" onClick={onClose}>Close</button>
         </div>
-    );
 
-    const renderGroupForm = () => (
-        <div className="admin-form">
-            <input type="text" placeholder="ID (e.g. moderator)" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={editingId !== 'new'} />
-            <div style={{fontSize: '0.9rem', marginBottom: '0.5rem'}}>Permissions (comma separated):</div>
-            <input type="text" placeholder="read, write" value={formData.permissions ? formData.permissions.join(', ') : ''} onChange={e => setFormData({...formData, permissions: e.target.value.split(',').map(s => s.trim()).filter(Boolean)})} />
-             <div className="admin-actions">
-                <button className="btn btn-sm btn-primary" onClick={handleSave}>Save</button>
-                <button className="btn btn-sm btn-secondary" onClick={() => setEditingId(null)}>Cancel</button>
-            </div>
-        </div>
-    );
+        {!editingId && (
+           <div style={{marginBottom: '1rem'}}>
+            <button className="btn btn-sm btn-primary" onClick={() => startEdit('new', {})}>
+              + Create New Section
+            </button>
+           </div>
+        )}
 
-    const renderSectionForm = () => (
-        <div className="admin-form">
-             <input type="text" placeholder="ID (e.g. news)" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={editingId !== 'new'} />
-             <input type="text" placeholder="Title" value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} />
-
-             <label>Read Groups:</label>
-             <select multiple style={{width: '100%', height: '80px'}} value={formData.readGroups || []} onChange={e => setFormData({...formData, readGroups: Array.from(e.target.selectedOptions, o => o.value)})}>
-                 {Object.keys(groups).map(g => <option key={g} value={g}>{g}</option>)}
-             </select>
-
-             <label>Write Groups:</label>
-             <select multiple style={{width: '100%', height: '80px'}} value={formData.writeGroups || []} onChange={e => setFormData({...formData, writeGroups: Array.from(e.target.selectedOptions, o => o.value)})}>
-                 {Object.keys(groups).map(g => <option key={g} value={g}>{g}</option>)}
-             </select>
-
-             <div style={{margin: '0.5rem 0'}}>
-                <label>
-                    <input type="checkbox" checked={formData.reviewRequired || false} onChange={e => setFormData({...formData, reviewRequired: e.target.checked})} />
-                    Review Required
-                </label>
-             </div>
-
-             <label>Approver Groups:</label>
-             <select multiple style={{width: '100%', height: '80px'}} value={formData.approverGroups || []} onChange={e => setFormData({...formData, approverGroups: Array.from(e.target.selectedOptions, o => o.value)})}>
-                 {Object.keys(groups).map(g => <option key={g} value={g}>{g}</option>)}
-             </select>
-
-             <div className="admin-actions" style={{marginTop: '1rem'}}>
-                <button className="btn btn-sm btn-primary" onClick={handleSave}>Save</button>
-                <button className="btn btn-sm btn-secondary" onClick={() => setEditingId(null)}>Cancel</button>
-            </div>
-        </div>
-    );
-
-    return (
-        <div className="wiki-article">
-            <div className="wiki-content-area">
-                <div className="wiki-header">
-                    <h1 className="wiki-header-title">Admin Panel</h1>
-                    <button className="btn btn-sm btn-secondary" onClick={onClose}>Close</button>
-                </div>
-
-                <div style={{display: 'flex', gap: '1rem', borderBottom: '1px solid #e5e7eb', marginBottom: '1rem'}}>
-                    {['users', 'groups', 'sections'].map(t => (
-                        <button
-                            key={t}
-                            onClick={() => { setTab(t); setEditingId(null); }}
-                            style={{
-                                padding: '0.5rem 1rem',
-                                border: 'none',
-                                background: 'none',
-                                borderBottom: tab === t ? '2px solid #2563eb' : '2px solid transparent',
-                                fontWeight: tab === t ? 600 : 400,
-                                textTransform: 'capitalize',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            {t}
-                        </button>
-                    ))}
-                </div>
-
-                {!editingId && (
-                     <div style={{marginBottom: '1rem'}}>
-                        <button className="btn btn-sm btn-primary" onClick={() => startEdit('new', {})}>
-                            + Create New {tab.slice(0, -1)}
-                        </button>
-                     </div>
-                )}
-
-                {editingId ? (
-                    <div style={{maxWidth: '500px'}}>
-                        {tab === 'users' && renderUserForm()}
-                        {tab === 'groups' && renderGroupForm()}
-                        {tab === 'sections' && renderSectionForm()}
+        {editingId ? (
+          <div style={{maxWidth: '500px'}}>
+            {renderSectionForm()}
+          </div>
+        ) : (
+          <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem'}}>
+            <thead>
+              <tr style={{textAlign: 'left', borderBottom: '1px solid #e5e7eb'}}>
+                <th style={{padding: '0.5rem'}}>ID</th>
+                <th style={{padding: '0.5rem'}}>Details</th>
+                <th style={{padding: '0.5rem'}}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+               {Object.values(sections).map(s => (
+                <tr key={s.id} style={{borderBottom: '1px solid #f3f4f6'}}>
+                  <td style={{padding: '0.5rem'}}>{s.id}</td>
+                  <td style={{padding: '0.5rem'}}>
+                    <div><strong>{s.title}</strong></div>
+                    <div style={{fontSize: '0.8rem'}}>
+                      <span style={{color: '#059669'}}>R: {s.readUsers.join(', ')}</span> |
+                      <span style={{color: '#d97706'}}> W: {s.writeUsers.join(', ')}</span>
                     </div>
-                ) : (
-                    <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem'}}>
-                        <thead>
-                            <tr style={{textAlign: 'left', borderBottom: '1px solid #e5e7eb'}}>
-                                <th style={{padding: '0.5rem'}}>ID</th>
-                                <th style={{padding: '0.5rem'}}>Details</th>
-                                <th style={{padding: '0.5rem'}}>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {tab === 'users' && users.map(u => (
-                                <tr key={u.id} style={{borderBottom: '1px solid #f3f4f6'}}>
-                                    <td style={{padding: '0.5rem'}}>{u.id}</td>
-                                    <td style={{padding: '0.5rem'}}>
-                                        <div><strong>{u.name}</strong></div>
-                                        <div style={{color: '#6b7280', fontSize: '0.8rem'}}>{u.groups.join(', ')}</div>
-                                    </td>
-                                    <td style={{padding: '0.5rem'}}>
-                                        <button className="btn-text" onClick={() => startEdit(u.id, u)}>Edit</button>
-                                        <button className="btn-text" style={{color: '#dc2626', marginLeft: '0.5rem'}} onClick={() => handleDelete(u.id)}>Delete</button>
-                                    </td>
-                                </tr>
-                            ))}
-                             {tab === 'groups' && Object.keys(groups).map(gid => (
-                                <tr key={gid} style={{borderBottom: '1px solid #f3f4f6'}}>
-                                    <td style={{padding: '0.5rem'}}>{gid}</td>
-                                    <td style={{padding: '0.5rem'}}>
-                                        <div style={{color: '#6b7280', fontSize: '0.8rem'}}>{groups[gid]?.permissions?.join(', ')}</div>
-                                    </td>
-                                    <td style={{padding: '0.5rem'}}>
-                                        <button className="btn-text" onClick={() => startEdit(gid, {id: gid, ...groups[gid]})}>Edit</button>
-                                        <button className="btn-text" style={{color: '#dc2626', marginLeft: '0.5rem'}} onClick={() => handleDelete(gid)}>Delete</button>
-                                    </td>
-                                </tr>
-                            ))}
-                             {tab === 'sections' && Object.values(sections).map(s => (
-                                <tr key={s.id} style={{borderBottom: '1px solid #f3f4f6'}}>
-                                    <td style={{padding: '0.5rem'}}>{s.id}</td>
-                                    <td style={{padding: '0.5rem'}}>
-                                        <div><strong>{s.title}</strong></div>
-                                        <div style={{fontSize: '0.8rem'}}>
-                                            <span style={{color: '#059669'}}>R: {s.readGroups.join(', ')}</span> |
-                                            <span style={{color: '#d97706'}}> W: {s.writeGroups.join(', ')}</span>
-                                        </div>
-                                        {s.reviewRequired && <div style={{fontSize: '0.75rem', color: '#dc2626'}}>Review Required (Approvers: {s.approverGroups.join(', ')})</div>}
-                                    </td>
-                                    <td style={{padding: '0.5rem'}}>
-                                        <button className="btn-text" onClick={() => startEdit(s.id, s)}>Edit</button>
-                                        <button className="btn-text" style={{color: '#dc2626', marginLeft: '0.5rem'}} onClick={() => handleDelete(s.id)}>Delete</button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
-        </div>
-    );
+                    {s.reviewRequired && <div style={{fontSize: '0.75rem', color: '#dc2626'}}>Review Required (Approvers: {s.approverUsers.join(', ')})</div>}
+                  </td>
+                  <td style={{padding: '0.5rem'}}>
+                    <button className="btn-text" onClick={() => startEdit(s.id, s)}>Edit</button>
+                    <button
+                      className="btn-text"
+                      style={{color: '#9ca3af', marginLeft: '0.5rem', cursor: currentUser?.isAdmin ? 'pointer' : 'not-allowed'}}
+                      onClick={() => currentUser?.isAdmin && handleDelete(s.id)}
+                      disabled={!currentUser?.isAdmin}
+                      title={currentUser?.isAdmin ? 'Delete Section' : "You don't have permission to delete sections"}
+                    >
+                      Delete
+                    </button>
+                    {!currentUser?.isAdmin && (
+                      <div style={{fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.25rem'}}>
+                      You don't have permission to delete sections.
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage, currentUser, users, onSwitchUser, onOpenAdmin }) {
@@ -602,16 +535,15 @@ function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage,
 
   // Group pages by section
   const pagesBySection = {};
-  Object.values(sections).forEach(section => {
-      // Check read permission
-      const canRead = section.readGroups.some(g => currentUser?.groups.includes(g));
+    Object.values(sections).forEach(section => {
+      const canRead = currentUser ? section.readUsers.includes(currentUser.id) : false;
       if (canRead) {
-          pagesBySection[section.id] = {
-              title: section.title,
-              pages: []
-          };
+        pagesBySection[section.id] = {
+          title: section.title,
+          pages: []
+        };
       }
-  });
+    });
 
   filteredPages.forEach(page => {
       // If page belongs to a section visible to user
@@ -639,10 +571,8 @@ function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage,
           ))}
         </select>
         <div style={{marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-          <span>Access: {currentUser?.groups.join(', ')}</span>
-          {currentUser?.groups.includes('admin') && (
-              <button className="btn-text" style={{fontSize: '0.75rem', color: '#2563eb', fontWeight: 600}} onClick={onOpenAdmin}>Admin</button>
-          )}
+          <span>Role: {currentUser?.isAdmin ? 'Admin' : 'Member'}</span>
+          <button className="btn-text" style={{fontSize: '0.75rem', color: '#2563eb', fontWeight: 600}} onClick={onOpenAdmin}>Sections</button>
         </div>
       </div>
 
@@ -705,7 +635,6 @@ function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage,
 export default function Wiki() {
   // State
   const [users, setUsers] = useState([]);
-  const [groups, setGroups] = useState({});
   const [currentUser, setCurrentUser] = useState(null);
   const [pages, setPages] = useState([]);
   const [sections, setSections] = useState({});
@@ -718,15 +647,16 @@ export default function Wiki() {
   // Load Initial Data
   useEffect(() => {
     const initData = async () => {
-      await db.init();
-      const [loadedUsers, loadedGroups, loadedPages, loadedSections] = await Promise.all([
+      const [loadedUsers, loadedPages, loadedSections] = await Promise.all([
          db.getUsers(),
-         db.getGroups(),
          db.getPages(),
          db.getSections()
       ]);
       setUsers(loadedUsers);
-      setGroups(loadedGroups);
+      const sectionMap = loadedSections.reduce((acc, section) => {
+        acc[section.id] = section;
+        return acc;
+      }, {});
 
       let initialUser = currentUser;
       if (!initialUser) {
@@ -741,7 +671,7 @@ export default function Wiki() {
       }
 
       setPages(loadedPages);
-      setSections(loadedSections);
+      setSections(sectionMap);
       setLoading(false);
     };
     initData();
@@ -781,13 +711,12 @@ export default function Wiki() {
 
   // Derived state for permissions
   // Logic: Check section permissions for current page.
-  const currentSection = currentPageData ? sections[currentPageData.sectionId] : null;
-  const canEdit = currentUser && currentSection
-      ? currentSection.writeGroups.some(g => currentUser.groups.includes(g))
-      : false; // If new page, we check in save/create logic, but button shouldn't show if no page.
+    const currentSection = currentPageData ? sections[currentPageData.sectionId] : null;
+    const canEdit = currentUser && currentSection
+      ? currentSection.writeUsers.includes(currentUser.id)
+      : false;
 
-  // For delete/revert, we restrict to admin for now, or match server logic
-  const canDelete = currentUser && currentUser.groups.includes('admin');
+    const canDelete = currentUser && currentUser.isAdmin;
 
   if (loading) return <div className="wiki-container">Loading...</div>;
 
@@ -809,10 +738,10 @@ export default function Wiki() {
         {viewMode === 'admin' && (
             <AdminPanel
                 users={users}
-                groups={groups}
                 sections={sections}
                 onUpdate={() => setTick(t => t + 1)}
-                onClose={() => setViewMode('read')}
+            onClose={() => setViewMode('read')}
+            currentUser={currentUser}
             />
         )}
 
@@ -823,12 +752,12 @@ export default function Wiki() {
             onHistory={() => setViewMode('history')}
             canEdit={canEdit}
             pendingRevisions={currentPageData.pendingRevisions}
-            isApprover={currentUser && sections[currentPageData.sectionId]?.approverGroups.some(g => currentUser.groups.includes(g))}
+            isApprover={currentUser && sections[currentPageData.sectionId]?.approverUsers.includes(currentUser.id)}
             currentUser={currentUser}
             onApprove={async (index) => {
                if(window.confirm("Approve this revision?")) {
                   try {
-                      await db.approveRevision(currentPageData.slug, index, currentUser);
+                  await db.approveRevision(currentPageData.slug, index, currentUser.id);
                       setTick(t => t + 1);
                   } catch(e) { alert(e.message); }
                }
@@ -836,7 +765,7 @@ export default function Wiki() {
             onReject={async (index) => {
                if(window.confirm("Reject this revision?")) {
                    try {
-                       await db.rejectRevision(currentPageData.slug, index, currentUser);
+                   await db.rejectRevision(currentPageData.slug, index, currentUser.id);
                        setTick(t => t + 1);
                    } catch(e) { alert(e.message); }
                }
@@ -861,7 +790,7 @@ export default function Wiki() {
             onCancel={() => setViewMode('read')}
             onSave={async (title, content, sectionId) => {
               try {
-                const res = await db.savePage(currentPageData.slug, title, content, currentUser, sectionId);
+                const res = await db.savePage(currentPageData.slug, title, content, currentUser.id, sectionId);
                 if (res.status === 'pending') {
                     alert("Changes submitted for review.");
                 }
@@ -889,7 +818,7 @@ export default function Wiki() {
               if (exists) return alert("Page already exists");
 
               try {
-                const res = await db.savePage(slug, title, content, currentUser, sectionId);
+                const res = await db.savePage(slug, title, content, currentUser.id, sectionId);
                  if (res.status === 'pending') {
                     alert("Page submitted for review.");
                     // Go to home or stay?
@@ -911,7 +840,7 @@ export default function Wiki() {
             canRevert={canDelete}
             onRevert={async (version) => {
                if(window.confirm(`Are you sure you want to revert to version ${version}?`)) {
-                 await db.revert(currentPageData.slug, version, currentUser);
+                 await db.revert(currentPageData.slug, version, currentUser.id);
                  setTick(t => t + 1);
                  setViewMode('read');
                }
