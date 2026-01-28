@@ -17,8 +17,7 @@
     }
   ],
   "sections": {
-    "general": {
-      "id": "general",
+    "General": {
       "title": "General",
       "readUsers": [
         "u1",
@@ -34,8 +33,7 @@
         "u1"
       ]
     },
-    "restricted": {
-      "id": "restricted",
+    "Restricted Area": {
       "title": "Restricted Area",
       "readUsers": [
         "u1",
@@ -54,7 +52,7 @@
   "pages": {
     "Home": {
       "title": "Home",
-      "sectionId": "general",
+      "sectionId": "General",
       "revisions": [
         {
           "version": 1,
@@ -66,7 +64,7 @@
     },
     "Secret": {
       "title": "Secret",
-      "sectionId": "restricted",
+      "sectionId": "Restricted Area",
       "revisions": [
         {
           "version": 1,
@@ -78,7 +76,7 @@
     },
     "Top Secret": {
       "title": "Top Secret",
-      "sectionId": "restricted",
+      "sectionId": "Restricted Area",
       "revisions": [],
       "pendingRevisions": [
         {
@@ -86,7 +84,7 @@
           "title": "Top Secret",
           "authorId": "u2",
           "timestamp": 1767042079073,
-          "sectionId": "restricted"
+          "sectionId": "Restricted Area"
         }
       ]
     }

@@ -35,7 +35,6 @@ export const db = {
     const data = await gqlRequest(
       `query {
         sections {
-          id
           title
           readUsers
           writeUsers
@@ -47,12 +46,11 @@ export const db = {
     return data.sections;
   },
 
-  async createSection(id, data) {
+  async createSection(data) {
     const userId = getCurrentUserId();
     const result = await gqlRequest(
-      `mutation CreateSection($id: ID!, $input: SectionInput!, $userId: ID) {
-        createSection(id: $id, input: $input, userId: $userId) {
-          id
+      `mutation CreateSection($input: SectionInput!, $userId: ID) {
+        createSection(input: $input, userId: $userId) {
           title
           readUsers
           writeUsers
@@ -60,17 +58,16 @@ export const db = {
           reviewRequired
         }
       }`,
-      { id, input: data, userId }
+      { input: data, userId }
     );
     return result.createSection;
   },
 
-  async updateSection(id, data) {
+  async updateSection(title, data) {
     const userId = getCurrentUserId();
     const result = await gqlRequest(
-      `mutation UpdateSection($id: ID!, $input: SectionInput!, $userId: ID) {
-        updateSection(id: $id, input: $input, userId: $userId) {
-          id
+      `mutation UpdateSection($title: String!, $input: SectionInput!, $userId: ID) {
+        updateSection(title: $title, input: $input, userId: $userId) {
           title
           readUsers
           writeUsers
@@ -78,18 +75,18 @@ export const db = {
           reviewRequired
         }
       }`,
-      { id, input: data, userId }
+      { title, input: data, userId }
     );
     return result.updateSection;
   },
 
-  async deleteSection(id) {
+  async deleteSection(title) {
     const userId = getCurrentUserId();
     const result = await gqlRequest(
-      `mutation DeleteSection($id: ID!, $userId: ID) {
-        deleteSection(id: $id, userId: $userId)
+      `mutation DeleteSection($title: String!, $userId: ID) {
+        deleteSection(title: $title, userId: $userId)
       }`,
-      { id, userId }
+      { title, userId }
     );
     return result.deleteSection;
   },

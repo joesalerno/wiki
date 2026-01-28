@@ -19,7 +19,6 @@ const typeDefs = `#graphql
   }
 
   type Section {
-    id: ID!
     title: String!
     readUsers: [ID!]!
     writeUsers: [ID!]!
@@ -77,9 +76,9 @@ const typeDefs = `#graphql
   }
 
   type Mutation {
-    createSection(id: ID!, input: SectionInput!, userId: ID): Section!
-    updateSection(id: ID!, input: SectionInput!, userId: ID): Section!
-    deleteSection(id: ID!, userId: ID): Boolean!
+    createSection(input: SectionInput!, userId: ID): Section!
+    updateSection(title: String!, input: SectionInput!, userId: ID): Section!
+    deleteSection(title: String!, userId: ID): Boolean!
     savePage(title: String!, content: String!, userId: ID!, sectionId: ID): Page!
     approveRevision(title: ID!, index: Int!, userId: ID!): Page!
     rejectRevision(title: ID!, index: Int!, userId: ID!): Page!
@@ -98,10 +97,10 @@ const resolvers = {
     history: (_, args) => dbController.getHistory(args.title)
   },
   Mutation: {
-    createSection: (_, args, context) => dbController.createSection(args.id, args.input, resolveUserId(args, context)),
-    updateSection: (_, args, context) => dbController.updateSection(args.id, args.input, resolveUserId(args, context)),
+    createSection: (_, args, context) => dbController.createSection(args.input?.title, args.input, resolveUserId(args, context)),
+    updateSection: (_, args, context) => dbController.updateSection(args.title, args.input, resolveUserId(args, context)),
     deleteSection: async (_, args, context) => {
-      await dbController.deleteSection(args.id, resolveUserId(args, context));
+      await dbController.deleteSection(args.title, resolveUserId(args, context));
       return true;
     },
     savePage: (_, args) => dbController.savePage(args.title, args.content, args.userId, args.sectionId),

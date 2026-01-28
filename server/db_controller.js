@@ -13,16 +13,14 @@ const SEED_DATA = {
     { id: 'u3', name: 'Charlie (Viewer)', isAdmin: false },
   ],
   sections: {
-    general: {
-      id: 'general',
+    'General': {
       title: 'General',
       readUsers: ['u1', 'u2', 'u3'],
       writeUsers: ['u1', 'u2'],
       reviewRequired: false,
       approverUsers: ['u1']
     },
-    restricted: {
-      id: 'restricted',
+    'Restricted Area': {
       title: 'Restricted Area',
       readUsers: ['u1', 'u2'],
       writeUsers: ['u1', 'u2'],
@@ -33,7 +31,7 @@ const SEED_DATA = {
   pages: {
     'Home': {
       title: 'Home',
-      sectionId: 'general',
+      sectionId: 'General',
       revisions: [
         {
           version: 1,
@@ -72,9 +70,11 @@ function normalizeData(data) {
       const writeUsers = (section.writeGroups || []).flatMap(g => userIdsByGroup.get(g) || []);
       const approverUsers = (section.approverGroups || []).flatMap(g => userIdsByGroup.get(g) || []);
 
-      sections[section.id] = {
-        id: section.id,
-        title: section.title,
+      const title = section.title || section.id;
+      if (!title) return;
+
+      sections[title] = {
+        title,
         readUsers,
         writeUsers,
         reviewRequired: Boolean(section.reviewRequired),
@@ -106,12 +106,36 @@ function normalizeData(data) {
     changed = true;
   }
 
+  const normalizedSections = {};
+  const sectionIdToTitle = new Map();
+  Object.entries(data.sections).forEach(([key, section]) => {
+    if (!section) return;
+    const title = section.title || section.id || key;
+    if (!title) return;
+
+    normalizedSections[title] = {
+      ...section,
+      title
+    };
+    delete normalizedSections[title].id;
+
+    sectionIdToTitle.set(key, title);
+    if (section?.id) sectionIdToTitle.set(section.id, title);
+  });
+
+  if (Object.keys(normalizedSections).length !== Object.keys(data.sections).length || Object.values(data.sections).some(s => s?.id)) {
+    data.sections = normalizedSections;
+    changed = true;
+  }
+
   Object.values(data.sections).forEach(section => {
     if (!Array.isArray(section.readUsers)) section.readUsers = [];
     if (!Array.isArray(section.writeUsers)) section.writeUsers = [];
     if (!Array.isArray(section.approverUsers)) section.approverUsers = [];
     if (section.reviewRequired === undefined) section.reviewRequired = false;
   });
+
+  const defaultSectionTitle = Object.keys(data.sections)[0] || 'General';
 
   if (data.pages && typeof data.pages === 'object') {
     const normalizedPages = {};
@@ -120,10 +144,20 @@ function normalizeData(data) {
       const title = page.title || page.slug || page.id;
       if (!title) return;
 
+      let normalizedSectionId = page.sectionId || page.sectionTitle || defaultSectionTitle;
+      if (sectionIdToTitle.has(normalizedSectionId)) {
+        normalizedSectionId = sectionIdToTitle.get(normalizedSectionId);
+      } else if (data.sections && data.sections[normalizedSectionId]) {
+        // ok
+      } else if (data.sections) {
+        const match = Object.values(data.sections).find(s => s.title === page.sectionId || s.title === page.sectionTitle);
+        if (match) normalizedSectionId = match.title;
+      }
+
       const cleanedPage = {
         ...page,
         title,
-        sectionId: page.sectionId || 'general'
+        sectionId: normalizedSectionId || defaultSectionTitle
       };
       delete cleanedPage.slug;
       delete cleanedPage.id;
@@ -133,10 +167,30 @@ function normalizeData(data) {
 
     const originalCount = Object.keys(data.pages).length;
     const normalizedCount = Object.keys(normalizedPages).length;
-    if (originalCount !== normalizedCount || Object.values(data.pages).some(p => p?.slug || p?.id)) {
+    const pagesNeedUpdate = Object.values(data.pages).some(p => p?.slug || p?.id || p?.sectionTitle);
+    if (originalCount !== normalizedCount || pagesNeedUpdate) {
       data.pages = normalizedPages;
       changed = true;
     }
+  }
+
+  if (data.pages && typeof data.pages === 'object') {
+    Object.values(data.pages).forEach(page => {
+      if (!page) return;
+      if (!page.sectionId || !data.sections[page.sectionId]) {
+        page.sectionId = defaultSectionTitle;
+        changed = true;
+      }
+
+      if (Array.isArray(page.pendingRevisions)) {
+        page.pendingRevisions.forEach(rev => {
+          if (!rev.sectionId || !data.sections[rev.sectionId]) {
+            rev.sectionId = page.sectionId || defaultSectionTitle;
+            changed = true;
+          }
+        });
+      }
+    });
   }
 
   return { data, changed };
@@ -173,6 +227,10 @@ function getUserById(data, userId) {
   return data.users.find(u => u.id === userId);
 }
 
+function getDefaultSectionTitle(data) {
+  return Object.keys(data.sections || {})[0] || 'General';
+}
+
 export const dbController = {
   async getUsers() {
     const data = await loadData();
@@ -184,32 +242,72 @@ export const dbController = {
     return Object.values(data.sections);
   },
 
-  async createSection(id, sectionData, userId) {
+  async createSection(title, sectionData, userId) {
     const data = await loadData();
     await checkAdmin(userId, data);
 
-    if (data.sections[id]) throw new Error('Section already exists');
-    data.sections[id] = { ...sectionData, id };
+    const normalizedTitle = (title || sectionData?.title || '').trim();
+    if (!normalizedTitle) throw new Error('Title is required');
+    if (data.sections[normalizedTitle]) throw new Error('Section already exists');
+    data.sections[normalizedTitle] = { ...sectionData, title: normalizedTitle };
     await saveData(data);
-    return data.sections[id];
+    return data.sections[normalizedTitle];
   },
 
-  async updateSection(id, sectionData, userId) {
+  async updateSection(title, sectionData, userId) {
     const data = await loadData();
     await checkAdmin(userId, data);
 
-    if (!data.sections[id]) throw new Error('Section not found');
-    data.sections[id] = { ...sectionData, id };
+    const normalizedTitle = (title || '').trim();
+    if (!normalizedTitle) throw new Error('Title is required');
+    if (!data.sections[normalizedTitle]) throw new Error('Section not found');
+
+    const nextTitle = (sectionData?.title || normalizedTitle).trim();
+    if (!nextTitle) throw new Error('Title is required');
+
+    if (nextTitle !== normalizedTitle && data.sections[nextTitle]) {
+      throw new Error('Section already exists');
+    }
+
+    const updatedSection = { ...sectionData, title: nextTitle };
+
+    if (nextTitle !== normalizedTitle) {
+      delete data.sections[normalizedTitle];
+      data.sections[nextTitle] = updatedSection;
+
+      Object.values(data.pages).forEach(page => {
+        if (page.sectionId === normalizedTitle) page.sectionId = nextTitle;
+        if (Array.isArray(page.pendingRevisions)) {
+          page.pendingRevisions.forEach(rev => {
+            if (rev.sectionId === normalizedTitle) rev.sectionId = nextTitle;
+          });
+        }
+      });
+    } else {
+      data.sections[normalizedTitle] = updatedSection;
+    }
     await saveData(data);
-    return data.sections[id];
+    return data.sections[nextTitle];
   },
 
-  async deleteSection(id, userId) {
+  async deleteSection(title, userId) {
     const data = await loadData();
     await checkAdmin(userId, data);
 
-    if (!data.sections[id]) throw new Error('Section not found');
-    delete data.sections[id];
+    const normalizedTitle = (title || '').trim();
+    if (!normalizedTitle) throw new Error('Title is required');
+    if (!data.sections[normalizedTitle]) throw new Error('Section not found');
+    delete data.sections[normalizedTitle];
+
+    const defaultSectionTitle = getDefaultSectionTitle(data);
+    Object.values(data.pages).forEach(page => {
+      if (page.sectionId === normalizedTitle) page.sectionId = defaultSectionTitle;
+      if (Array.isArray(page.pendingRevisions)) {
+        page.pendingRevisions.forEach(rev => {
+          if (rev.sectionId === normalizedTitle) rev.sectionId = defaultSectionTitle;
+        });
+      }
+    });
     await saveData(data);
     return { success: true };
   },
@@ -218,9 +316,11 @@ export const dbController = {
     const data = await loadData();
     if (!userId) return [];
 
+    const defaultSectionTitle = getDefaultSectionTitle(data);
+
     return Object.values(data.pages)
       .filter(p => {
-        const section = data.sections[p.sectionId || 'general'];
+        const section = data.sections[p.sectionId || defaultSectionTitle];
         return section && section.readUsers.includes(userId);
       })
       .map(p => {
@@ -238,7 +338,8 @@ export const dbController = {
     const data = await loadData();
     const page = data.pages[title];
     if (!page) return null;
-    const section = data.sections[page.sectionId || 'general'];
+    const defaultSectionTitle = getDefaultSectionTitle(data);
+    const section = data.sections[page.sectionId || defaultSectionTitle];
     if (!section || !userId || !section.readUsers.includes(userId)) {
       throw new Error('Permission denied');
     }
@@ -255,7 +356,8 @@ export const dbController = {
     if (!normalizedTitle) throw new Error('Title is required');
     let page = data.pages[normalizedTitle];
 
-    const targetSectionId = sectionId || (page ? page.sectionId : 'general');
+    const defaultSectionTitle = getDefaultSectionTitle(data);
+    const targetSectionId = sectionId || (page ? page.sectionId : defaultSectionTitle);
     const section = data.sections[targetSectionId];
     if (!section) throw new Error('Invalid section');
 
@@ -325,7 +427,8 @@ export const dbController = {
     }
 
     const pendingRev = page.pendingRevisions[index];
-    const section = data.sections[pendingRev.sectionId || page.sectionId];
+    const defaultSectionTitle = getDefaultSectionTitle(data);
+    const section = data.sections[pendingRev.sectionId || page.sectionId || defaultSectionTitle];
 
     if (!section || !section.approverUsers.includes(userId)) {
       throw new Error('Permission denied');
@@ -362,7 +465,8 @@ export const dbController = {
     }
 
     const pendingRev = page.pendingRevisions[index];
-    const section = data.sections[pendingRev.sectionId || page.sectionId];
+    const defaultSectionTitle = getDefaultSectionTitle(data);
+    const section = data.sections[pendingRev.sectionId || page.sectionId || defaultSectionTitle];
 
     if (!section || !section.approverUsers.includes(userId)) {
       throw new Error('Permission denied');

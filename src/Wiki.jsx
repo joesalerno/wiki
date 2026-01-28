@@ -180,7 +180,7 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
              onChange={e => setSectionId(e.target.value)}
           >
              {Object.values(sections).map(s => (
-                 <option key={s.id} value={s.id}>{s.title}</option>
+                <option key={s.title} value={s.title}>{s.title}</option>
              ))}
           </select>
         </div>
@@ -385,10 +385,10 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({});
 
-    const startEdit = (id, data) => {
-        setEditingId(id);
-        if (id === 'new') {
-          setFormData({ id: '', title: '', readUsers: [], writeUsers: [], approverUsers: [], reviewRequired: false });
+    const startEdit = (title, data) => {
+        setEditingId(title);
+        if (title === 'new') {
+          setFormData({ title: '', readUsers: [], writeUsers: [], approverUsers: [], reviewRequired: false });
           return;
         }
         setFormData({
@@ -403,7 +403,7 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
   const handleSave = async () => {
     try {
       if (editingId === 'new') {
-        await db.createSection(formData.id, formData);
+        await db.createSection(formData);
       } else {
         await db.updateSection(editingId, formData);
       }
@@ -414,10 +414,10 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (title) => {
     if (!window.confirm("Are you sure?")) return;
     try {
-      await db.deleteSection(id);
+      await db.deleteSection(title);
       onUpdate();
     } catch (e) {
       alert(e.message);
@@ -426,7 +426,6 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
 
   const renderSectionForm = () => (
     <div className="admin-form">
-       <input type="text" placeholder="ID (e.g. news)" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={editingId !== 'new'} />
        <input type="text" placeholder="Title" value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} />
 
        <label>Read Users:</label>
@@ -482,15 +481,15 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
           <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem'}}>
             <thead>
               <tr style={{textAlign: 'left', borderBottom: '1px solid #e5e7eb'}}>
-                <th style={{padding: '0.5rem'}}>ID</th>
+                <th style={{padding: '0.5rem'}}>Title</th>
                 <th style={{padding: '0.5rem'}}>Details</th>
                 <th style={{padding: '0.5rem'}}>Actions</th>
               </tr>
             </thead>
             <tbody>
                {Object.values(sections).map(s => (
-                <tr key={s.id} style={{borderBottom: '1px solid #f3f4f6'}}>
-                  <td style={{padding: '0.5rem'}}>{s.id}</td>
+                <tr key={s.title} style={{borderBottom: '1px solid #f3f4f6'}}>
+                  <td style={{padding: '0.5rem'}}>{s.title}</td>
                   <td style={{padding: '0.5rem'}}>
                     <div><strong>{s.title}</strong></div>
                     <div style={{fontSize: '0.8rem'}}>
@@ -500,11 +499,11 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
                     {s.reviewRequired && <div style={{fontSize: '0.75rem', color: '#dc2626'}}>Review Required (Approvers: {s.approverUsers.join(', ')})</div>}
                   </td>
                   <td style={{padding: '0.5rem'}}>
-                    <button className="btn-text" onClick={() => startEdit(s.id, s)}>Edit</button>
+                    <button className="btn-text" onClick={() => startEdit(s.title, s)}>Edit</button>
                     <button
                       className="btn-text"
                       style={{color: '#9ca3af', marginLeft: '0.5rem', cursor: currentUser?.isAdmin ? 'pointer' : 'not-allowed'}}
-                      onClick={() => currentUser?.isAdmin && handleDelete(s.id)}
+                      onClick={() => currentUser?.isAdmin && handleDelete(s.title)}
                       disabled={!currentUser?.isAdmin}
                       title={currentUser?.isAdmin ? 'Delete Section' : "You don't have permission to delete sections"}
                     >
@@ -538,20 +537,21 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
     Object.values(sections).forEach(section => {
       const canRead = currentUser ? section.readUsers.includes(currentUser.id) : false;
       if (canRead) {
-        pagesBySection[section.id] = {
+        pagesBySection[section.title] = {
           title: section.title,
           pages: []
         };
       }
     });
 
-  filteredPages.forEach(page => {
+    const defaultSectionTitle = Object.keys(sections)[0];
+    filteredPages.forEach(page => {
       // If page belongs to a section visible to user
-      const secId = page.sectionId || 'general';
-      if (pagesBySection[secId]) {
-          pagesBySection[secId].pages.push(page);
+      const secTitle = page.sectionId || defaultSectionTitle;
+      if (pagesBySection[secTitle]) {
+        pagesBySection[secTitle].pages.push(page);
       }
-  });
+    });
 
   return (
     <aside className="wiki-sidebar">
@@ -654,7 +654,7 @@ export default function Wiki() {
       ]);
       setUsers(loadedUsers);
       const sectionMap = loadedSections.reduce((acc, section) => {
-        acc[section.id] = section;
+        acc[section.title] = section;
         return acc;
       }, {});
 
