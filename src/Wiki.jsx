@@ -271,7 +271,7 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
 
   useEffect(() => {
     if (page) {
-      db.getHistory(page.slug).then(setRevisions);
+      db.getHistory(page.title).then(setRevisions);
     }
   }, [page]);
 
@@ -526,7 +526,7 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
   );
 }
 
-function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage, currentUser, users, onSwitchUser, onOpenAdmin }) {
+function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage, currentUser, users, onSwitchUser, onOpenAdmin }) {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredPages = pages.filter(page =>
@@ -604,17 +604,17 @@ function Sidebar({ pages, sections, currentPageSlug, onSelectPage, onCreatePage,
                    {pagesBySection[secId].title}
                </div>
                <ul>
-                   {pagesBySection[secId].pages.map(page => (
-                        <li key={page.slug} className="wiki-nav-item">
-                        <a
-                            href={`#${page.slug}`}
-                            onClick={(e) => { e.preventDefault(); onSelectPage(page.slug); }}
-                            className={`wiki-nav-link ${currentPageSlug === page.slug ? 'active' : ''}`}
-                        >
-                            {page.title}
-                        </a>
-                        </li>
-                   ))}
+                     {pagesBySection[secId].pages.map(page => (
+                      <li key={page.title} className="wiki-nav-item">
+                      <a
+                        href={`#${encodeURIComponent(page.title)}`}
+                        onClick={(e) => { e.preventDefault(); onSelectPage(page.title); }}
+                        className={`wiki-nav-link ${currentPageTitle === page.title ? 'active' : ''}`}
+                      >
+                        {page.title}
+                      </a>
+                      </li>
+                     ))}
                    {pagesBySection[secId].pages.length === 0 && (
                        <li style={{color: '#9ca3af', fontSize: '0.8rem', paddingLeft: '0.5rem'}}>Empty</li>
                    )}
@@ -638,7 +638,7 @@ export default function Wiki() {
   const [currentUser, setCurrentUser] = useState(null);
   const [pages, setPages] = useState([]);
   const [sections, setSections] = useState({});
-  const [currentPageSlug, setCurrentPageSlug] = useState('home');
+  const [currentPageTitle, setCurrentPageTitle] = useState('Home');
   const [currentPageData, setCurrentPageData] = useState(null);
   const [viewMode, setViewMode] = useState('read'); // read, edit, history, new, admin
   const [loading, setLoading] = useState(true);
@@ -680,15 +680,15 @@ export default function Wiki() {
   // Update Current Page Data when dependencies change
   useEffect(() => {
     const loadPage = async () => {
-      if (currentPageSlug) {
-          const page = await db.getPage(currentPageSlug);
+        if (currentPageTitle) {
+          const page = await db.getPage(currentPageTitle);
           setCurrentPageData(page);
       } else {
           setCurrentPageData(null);
       }
     };
     loadPage();
-  }, [currentPageSlug, tick]);
+      }, [currentPageTitle, tick]);
 
   const handleSwitchUser = (userId) => {
     const user = users.find(u => u.id === userId);
@@ -699,13 +699,13 @@ export default function Wiki() {
     }
   };
 
-  const handleSelectPage = (slug) => {
-    setCurrentPageSlug(slug);
+  const handleSelectPage = (title) => {
+    setCurrentPageTitle(title);
     setViewMode('read');
   };
 
   const handleCreatePage = () => {
-    setCurrentPageSlug(null);
+    setCurrentPageTitle(null);
     setViewMode('new');
   };
 
@@ -725,7 +725,7 @@ export default function Wiki() {
       <Sidebar
         pages={pages}
         sections={sections}
-        currentPageSlug={currentPageSlug}
+        currentPageTitle={currentPageTitle}
         onSelectPage={handleSelectPage}
         onCreatePage={handleCreatePage}
         currentUser={currentUser}
@@ -757,7 +757,7 @@ export default function Wiki() {
             onApprove={async (index) => {
                if(window.confirm("Approve this revision?")) {
                   try {
-                  await db.approveRevision(currentPageData.slug, index, currentUser.id);
+                    await db.approveRevision(currentPageData.title, index, currentUser.id);
                       setTick(t => t + 1);
                   } catch(e) { alert(e.message); }
                }
@@ -765,7 +765,7 @@ export default function Wiki() {
             onReject={async (index) => {
                if(window.confirm("Reject this revision?")) {
                    try {
-                   await db.rejectRevision(currentPageData.slug, index, currentUser.id);
+                     await db.rejectRevision(currentPageData.title, index, currentUser.id);
                        setTick(t => t + 1);
                    } catch(e) { alert(e.message); }
                }
@@ -790,7 +790,7 @@ export default function Wiki() {
             onCancel={() => setViewMode('read')}
             onSave={async (title, content, sectionId) => {
               try {
-                const res = await db.savePage(currentPageData.slug, title, content, currentUser.id, sectionId);
+                const res = await db.savePage(title, content, currentUser.id, sectionId);
                 if (res.status === 'pending') {
                     alert("Changes submitted for review.");
                 }
@@ -812,18 +812,18 @@ export default function Wiki() {
             sections={sections}
             onCancel={() => setViewMode('read')}
             onSave={async (title, content, sectionId) => {
-              const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-              if (!slug) return alert("Please enter a valid title");
-              const exists = await db.getPage(slug);
+              const normalizedTitle = title.trim();
+              if (!normalizedTitle) return alert("Please enter a valid title");
+              const exists = pages.some(p => p.title.toLowerCase() === normalizedTitle.toLowerCase());
               if (exists) return alert("Page already exists");
 
               try {
-                const res = await db.savePage(slug, title, content, currentUser.id, sectionId);
+                const res = await db.savePage(normalizedTitle, content, currentUser.id, sectionId);
                  if (res.status === 'pending') {
                     alert("Page submitted for review.");
                     // Go to home or stay?
                 }
-                setCurrentPageSlug(slug);
+                setCurrentPageTitle(normalizedTitle);
                 setTick(t => t + 1);
                 setViewMode('read');
               } catch (e) {
@@ -840,7 +840,7 @@ export default function Wiki() {
             canRevert={canDelete}
             onRevert={async (version) => {
                if(window.confirm(`Are you sure you want to revert to version ${version}?`)) {
-                 await db.revert(currentPageData.slug, version, currentUser.id);
+                 await db.revert(currentPageData.title, version, currentUser.id);
                  setTick(t => t + 1);
                  setViewMode('read');
                }

@@ -52,9 +52,7 @@
     }
   },
   "pages": {
-    "home": {
-      "id": "home",
-      "slug": "home",
+    "Home": {
       "title": "Home",
       "sectionId": "general",
       "revisions": [
@@ -66,9 +64,7 @@
         }
       ]
     },
-    "secret": {
-      "id": "secret",
-      "slug": "secret",
+    "Secret": {
       "title": "Secret",
       "sectionId": "restricted",
       "revisions": [
@@ -80,9 +76,7 @@
         }
       ]
     },
-    "top-secret": {
-      "id": "top-secret",
-      "slug": "top-secret",
+    "Top Secret": {
       "title": "Top Secret",
       "sectionId": "restricted",
       "revisions": [],

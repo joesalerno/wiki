@@ -31,9 +31,7 @@ const SEED_DATA = {
     }
   },
   pages: {
-    'home': {
-      id: 'home',
-      slug: 'home',
+    'Home': {
       title: 'Home',
       sectionId: 'general',
       revisions: [
@@ -103,12 +101,43 @@ function normalizeData(data) {
     changed = true;
   }
 
+  if (!data.pages) {
+    data.pages = {};
+    changed = true;
+  }
+
   Object.values(data.sections).forEach(section => {
     if (!Array.isArray(section.readUsers)) section.readUsers = [];
     if (!Array.isArray(section.writeUsers)) section.writeUsers = [];
     if (!Array.isArray(section.approverUsers)) section.approverUsers = [];
     if (section.reviewRequired === undefined) section.reviewRequired = false;
   });
+
+  if (data.pages && typeof data.pages === 'object') {
+    const normalizedPages = {};
+    Object.values(data.pages).forEach(page => {
+      if (!page) return;
+      const title = page.title || page.slug || page.id;
+      if (!title) return;
+
+      const cleanedPage = {
+        ...page,
+        title,
+        sectionId: page.sectionId || 'general'
+      };
+      delete cleanedPage.slug;
+      delete cleanedPage.id;
+
+      normalizedPages[title] = cleanedPage;
+    });
+
+    const originalCount = Object.keys(data.pages).length;
+    const normalizedCount = Object.keys(normalizedPages).length;
+    if (originalCount !== normalizedCount || Object.values(data.pages).some(p => p?.slug || p?.id)) {
+      data.pages = normalizedPages;
+      changed = true;
+    }
+  }
 
   return { data, changed };
 }
@@ -197,7 +226,6 @@ export const dbController = {
       .map(p => {
         const head = p.revisions[0] || {};
         return {
-          slug: p.slug,
           title: p.title,
           sectionId: p.sectionId,
           updatedAt: head.timestamp,
@@ -206,9 +234,9 @@ export const dbController = {
       });
   },
 
-  async getPage(slug, userId) {
+  async getPage(title, userId) {
     const data = await loadData();
-    const page = data.pages[slug];
+    const page = data.pages[title];
     if (!page) return null;
     const section = data.sections[page.sectionId || 'general'];
     if (!section || !userId || !section.readUsers.includes(userId)) {
@@ -221,9 +249,11 @@ export const dbController = {
     };
   },
 
-  async savePage(slug, title, content, userId, sectionId) {
+  async savePage(title, content, userId, sectionId) {
     const data = await loadData();
-    let page = data.pages[slug];
+    const normalizedTitle = title?.trim();
+    if (!normalizedTitle) throw new Error('Title is required');
+    let page = data.pages[normalizedTitle];
 
     const targetSectionId = sectionId || (page ? page.sectionId : 'general');
     const section = data.sections[targetSectionId];
@@ -240,21 +270,19 @@ export const dbController = {
     if (reviewRequired) {
       if (!page) {
         page = {
-          id: slug,
-          slug,
-          title,
+          title: normalizedTitle,
           sectionId: targetSectionId,
           revisions: [],
           pendingRevisions: []
         };
-        data.pages[slug] = page;
+        data.pages[normalizedTitle] = page;
       } else {
         if (!page.pendingRevisions) page.pendingRevisions = [];
       }
 
       page.pendingRevisions.push({
         content,
-        title,
+        title: normalizedTitle,
         authorId: userId,
         timestamp: Date.now(),
         sectionId: targetSectionId
@@ -273,15 +301,13 @@ export const dbController = {
 
     if (!page) {
       page = {
-        id: slug,
-        slug,
-        title,
+        title: normalizedTitle,
         sectionId: targetSectionId,
         revisions: []
       };
-      data.pages[slug] = page;
+      data.pages[normalizedTitle] = page;
     } else {
-      page.title = title;
+      page.title = normalizedTitle;
       page.sectionId = targetSectionId;
     }
 
@@ -291,9 +317,9 @@ export const dbController = {
     return { ...page, status: 'published' };
   },
 
-  async approveRevision(slug, index, userId) {
+  async approveRevision(title, index, userId) {
     const data = await loadData();
-    const page = data.pages[slug];
+    const page = data.pages[title];
     if (!page || !page.pendingRevisions || !page.pendingRevisions[index]) {
       throw new Error('Revision not found');
     }
@@ -328,9 +354,9 @@ export const dbController = {
     return page;
   },
 
-  async rejectRevision(slug, index, userId) {
+  async rejectRevision(title, index, userId) {
     const data = await loadData();
-    const page = data.pages[slug];
+    const page = data.pages[title];
     if (!page || !page.pendingRevisions || !page.pendingRevisions[index]) {
       throw new Error('Revision not found');
     }
@@ -348,20 +374,20 @@ export const dbController = {
     return page;
   },
 
-  async getHistory(slug) {
+  async getHistory(title) {
      const data = await loadData();
-     const page = data.pages[slug];
+     const page = data.pages[title];
      return page ? page.revisions : [];
   },
 
-  async revert(slug, version, userId) {
+  async revert(title, version, userId) {
     const data = await loadData();
-    const page = data.pages[slug];
+    const page = data.pages[title];
     if (!page) return null;
 
     const targetRev = page.revisions.find(r => r.version === parseInt(version));
     if (!targetRev) return null;
 
-    return await this.savePage(slug, page.title, targetRev.content, userId, page.sectionId);
+    return await this.savePage(page.title, targetRev.content, userId, page.sectionId);
   }
 };

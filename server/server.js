@@ -45,8 +45,6 @@ const typeDefs = `#graphql
   }
 
   type Page {
-    id: ID!
-    slug: ID!
     title: String!
     sectionId: ID!
     revisions: [Revision!]!
@@ -56,7 +54,6 @@ const typeDefs = `#graphql
   }
 
   type PageSummary {
-    slug: ID!
     title: String!
     sectionId: ID!
     updatedAt: Float
@@ -75,18 +72,18 @@ const typeDefs = `#graphql
     users: [User!]!
     sections: [Section!]!
     pages(userId: ID): [PageSummary!]!
-    page(slug: ID!, userId: ID): Page
-    history(slug: ID!): [Revision!]!
+    page(title: ID!, userId: ID): Page
+    history(title: ID!): [Revision!]!
   }
 
   type Mutation {
     createSection(id: ID!, input: SectionInput!, userId: ID): Section!
     updateSection(id: ID!, input: SectionInput!, userId: ID): Section!
     deleteSection(id: ID!, userId: ID): Boolean!
-    savePage(slug: ID!, title: String!, content: String!, userId: ID!, sectionId: ID): Page!
-    approveRevision(slug: ID!, index: Int!, userId: ID!): Page!
-    rejectRevision(slug: ID!, index: Int!, userId: ID!): Page!
-    revert(slug: ID!, version: Int!, userId: ID!): Page
+    savePage(title: String!, content: String!, userId: ID!, sectionId: ID): Page!
+    approveRevision(title: ID!, index: Int!, userId: ID!): Page!
+    rejectRevision(title: ID!, index: Int!, userId: ID!): Page!
+    revert(title: ID!, version: Int!, userId: ID!): Page
   }
 `;
 
@@ -97,8 +94,8 @@ const resolvers = {
     users: () => dbController.getUsers(),
     sections: () => dbController.getSections(),
     pages: (_, args, context) => dbController.getPages(resolveUserId(args, context)),
-    page: (_, args, context) => dbController.getPage(args.slug, resolveUserId(args, context)),
-    history: (_, args) => dbController.getHistory(args.slug)
+    page: (_, args, context) => dbController.getPage(args.title, resolveUserId(args, context)),
+    history: (_, args) => dbController.getHistory(args.title)
   },
   Mutation: {
     createSection: (_, args, context) => dbController.createSection(args.id, args.input, resolveUserId(args, context)),
@@ -107,10 +104,10 @@ const resolvers = {
       await dbController.deleteSection(args.id, resolveUserId(args, context));
       return true;
     },
-    savePage: (_, args) => dbController.savePage(args.slug, args.title, args.content, args.userId, args.sectionId),
-    approveRevision: (_, args) => dbController.approveRevision(args.slug, args.index, args.userId),
-    rejectRevision: (_, args) => dbController.rejectRevision(args.slug, args.index, args.userId),
-    revert: (_, args) => dbController.revert(args.slug, args.version, args.userId)
+    savePage: (_, args) => dbController.savePage(args.title, args.content, args.userId, args.sectionId),
+    approveRevision: (_, args) => dbController.approveRevision(args.title, args.index, args.userId),
+    rejectRevision: (_, args) => dbController.rejectRevision(args.title, args.index, args.userId),
+    revert: (_, args) => dbController.revert(args.title, args.version, args.userId)
   }
 };
 

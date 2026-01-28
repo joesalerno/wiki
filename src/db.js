@@ -99,7 +99,6 @@ export const db = {
     const data = await gqlRequest(
       `query Pages($userId: ID) {
         pages(userId: $userId) {
-          slug
           title
           sectionId
           updatedAt
@@ -112,13 +111,11 @@ export const db = {
     return data.pages;
   },
 
-  async getPage(slug) {
+  async getPage(title) {
     const userId = getCurrentUserId();
     const data = await gqlRequest(
-      `query Page($slug: ID!, $userId: ID) {
-        page(slug: $slug, userId: $userId) {
-          id
-          slug
+      `query Page($title: ID!, $userId: ID) {
+        page(title: $title, userId: $userId) {
           title
           sectionId
           revisions {
@@ -146,18 +143,16 @@ export const db = {
           }
         }
       }`,
-      { slug, userId },
+      { title, userId },
       userId
     );
     return data.page;
   },
 
-  async savePage(slug, title, content, userId, sectionId) {
+  async savePage(title, content, userId, sectionId) {
     const data = await gqlRequest(
-      `mutation SavePage($slug: ID!, $title: String!, $content: String!, $userId: ID!, $sectionId: ID) {
-        savePage(slug: $slug, title: $title, content: $content, userId: $userId, sectionId: $sectionId) {
-          id
-          slug
+      `mutation SavePage($title: String!, $content: String!, $userId: ID!, $sectionId: ID) {
+        savePage(title: $title, content: $content, userId: $userId, sectionId: $sectionId) {
           title
           sectionId
           status
@@ -186,18 +181,16 @@ export const db = {
           }
         }
       }`,
-      { slug, title, content, userId, sectionId },
+      { title, content, userId, sectionId },
       userId
     );
     return data.savePage;
   },
 
-  async approveRevision(slug, index, userId) {
+  async approveRevision(title, index, userId) {
     const data = await gqlRequest(
-      `mutation ApproveRevision($slug: ID!, $index: Int!, $userId: ID!) {
-        approveRevision(slug: $slug, index: $index, userId: $userId) {
-          id
-          slug
+      `mutation ApproveRevision($title: ID!, $index: Int!, $userId: ID!) {
+        approveRevision(title: $title, index: $index, userId: $userId) {
           title
           sectionId
           revisions {
@@ -225,18 +218,16 @@ export const db = {
           }
         }
       }`,
-      { slug, index, userId },
+      { title, index, userId },
       userId
     );
     return data.approveRevision;
   },
 
-  async rejectRevision(slug, index, userId) {
+  async rejectRevision(title, index, userId) {
     const data = await gqlRequest(
-      `mutation RejectRevision($slug: ID!, $index: Int!, $userId: ID!) {
-        rejectRevision(slug: $slug, index: $index, userId: $userId) {
-          id
-          slug
+      `mutation RejectRevision($title: ID!, $index: Int!, $userId: ID!) {
+        rejectRevision(title: $title, index: $index, userId: $userId) {
           title
           sectionId
           revisions {
@@ -264,16 +255,16 @@ export const db = {
           }
         }
       }`,
-      { slug, index, userId },
+      { title, index, userId },
       userId
     );
     return data.rejectRevision;
   },
 
-  async getHistory(slug) {
+  async getHistory(title) {
     const data = await gqlRequest(
-      `query History($slug: ID!) {
-        history(slug: $slug) {
+      `query History($title: ID!) {
+        history(title: $title) {
           version
           content
           authorId
@@ -282,17 +273,15 @@ export const db = {
           approvedAt
         }
       }`,
-      { slug }
+      { title }
     );
     return data.history;
   },
 
-  async revert(slug, version, userId) {
+  async revert(title, version, userId) {
     const data = await gqlRequest(
-      `mutation Revert($slug: ID!, $version: Int!, $userId: ID!) {
-        revert(slug: $slug, version: $version, userId: $userId) {
-          id
-          slug
+      `mutation Revert($title: ID!, $version: Int!, $userId: ID!) {
+        revert(title: $title, version: $version, userId: $userId) {
           title
           sectionId
           revisions {
@@ -320,7 +309,7 @@ export const db = {
           }
         }
       }`,
-      { slug, version, userId },
+      { title, version, userId },
       userId
     );
     return data.revert;
