@@ -19,8 +19,8 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
               <button className="btn btn-minimal" onClick={onHistory} title="View History">
                  <span style={{fontSize: '1.2rem', marginRight: '0.25rem'}}>↺</span> History
               </button>
-              {(
-                <button title={canEdit ? "Edit Page" : "You do not have permission to edit this page"}  disabled={!canEdit} className="btn btn-sm btn-primary" onClick={onEdit} style={{ cursor: canEdit ? 'pointer' : 'not-allowed', backgroundColor: canEdit ? '#3b82f6' : '#6b7280', opacity: canEdit ? 1 : 0.5 }}>Edit Page</button>
+              {canEdit && (
+               <button title="Edit Page" className="btn btn-sm btn-primary" onClick={onEdit}>Edit Page</button>
               )}
            </div>
         </div>
@@ -668,15 +668,16 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
         </select>
         <div style={{marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
           <span>Role: {currentUser?.isAdmin ? 'Admin' : 'Member'}</span>
-          <button
-            className="btn-text"
-            style={{fontSize: '0.75rem', color: '#2563eb', fontWeight: 600, cursor: canManageSections ? 'pointer' : 'not-allowed'}}
-            onClick={onOpenAdmin}
-            disabled={!canManageSections}
-            title={canManageSections ? 'Manage Sections' : 'Only admins can manage sections'}
-          >
-            Sections
-          </button>
+          {canManageSections && (
+            <button
+              className="btn-text"
+              style={{fontSize: '0.75rem', color: '#2563eb', fontWeight: 600}}
+              onClick={onOpenAdmin}
+              title="Manage Sections"
+            >
+              Sections
+            </button>
+          )}
         </div>
       </div>
 
