@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
-import { dbController } from './db_controller.js';
+import { wikiDataController } from './wikiDataController.js';
 
 const app = express();
 const PORT = 3001;
@@ -12,13 +12,13 @@ app.use(cors());
 app.use(express.json());
 
 const typeDefs = `#graphql
-  type User {
+  type WikiUser {
     id: ID!
     name: String!
     isAdmin: Boolean!
   }
 
-  type Section {
+  type WikiSection {
     title: String!
     readUsers: [ID!]!
     writeUsers: [ID!]!
@@ -26,7 +26,7 @@ const typeDefs = `#graphql
     reviewRequired: Boolean!
   }
 
-  type Revision {
+  type WikiRevision {
     version: Int!
     content: String!
     authorId: ID!
@@ -35,7 +35,7 @@ const typeDefs = `#graphql
     approvedAt: Float
   }
 
-  type PendingRevision {
+  type WikiPendingRevision {
     content: String!
     title: String!
     authorId: ID!
@@ -43,23 +43,23 @@ const typeDefs = `#graphql
     sectionId: ID
   }
 
-  type Page {
+  type WikiPage {
     title: String!
     sectionId: ID!
-    revisions: [Revision!]!
-    pendingRevisions: [PendingRevision!]
-    currentRevision: Revision
+    revisions: [WikiRevision!]!
+    pendingRevisions: [WikiPendingRevision!]
+    currentRevision: WikiRevision
     status: String
   }
 
-  type PageSummary {
+  type WikiPageSummary {
     title: String!
     sectionId: ID!
     updatedAt: Float
     authorId: ID
   }
 
-  input SectionInput {
+  input WikiSectionInput {
     title: String!
     readUsers: [ID!]!
     writeUsers: [ID!]!
@@ -68,21 +68,21 @@ const typeDefs = `#graphql
   }
 
   type Query {
-    users: [User!]!
-    sections: [Section!]!
-    pages(userId: ID): [PageSummary!]!
-    page(title: ID!, userId: ID): Page
-    history(title: ID!): [Revision!]!
+    wikiUsers: [WikiUser!]!
+    wikiSections: [WikiSection!]!
+    wikiPages(userId: ID): [WikiPageSummary!]!
+    wikiPage(title: ID!, userId: ID): WikiPage
+    wikiPageHistory(title: ID!): [WikiRevision!]!
   }
 
   type Mutation {
-    createSection(input: SectionInput!, userId: ID): Section!
-    updateSection(title: String!, input: SectionInput!, userId: ID): Section!
-    deleteSection(title: String!, userId: ID): Boolean!
-    savePage(title: String!, content: String!, userId: ID!, sectionId: ID): Page!
-    approveRevision(title: ID!, index: Int!, userId: ID!): Page!
-    rejectRevision(title: ID!, index: Int!, userId: ID!): Page!
-    revert(title: ID!, version: Int!, userId: ID!): Page
+    createWikiSection(input: WikiSectionInput!, userId: ID): WikiSection!
+    updateWikiSection(title: String!, input: WikiSectionInput!, userId: ID): WikiSection!
+    deleteWikiSection(title: String!, userId: ID): Boolean!
+    saveWikiPage(title: String!, content: String!, userId: ID!, sectionId: ID): WikiPage!
+    approveWikiRevision(title: ID!, index: Int!, userId: ID!): WikiPage!
+    rejectWikiRevision(title: ID!, index: Int!, userId: ID!): WikiPage!
+    revertWikiPage(title: ID!, version: Int!, userId: ID!): WikiPage
   }
 `;
 
@@ -90,23 +90,23 @@ const resolveUserId = (args, context) => args.userId || context.userId || null;
 
 const resolvers = {
   Query: {
-    users: () => dbController.getUsers(),
-    sections: () => dbController.getSections(),
-    pages: (_, args, context) => dbController.getPages(resolveUserId(args, context)),
-    page: (_, args, context) => dbController.getPage(args.title, resolveUserId(args, context)),
-    history: (_, args) => dbController.getHistory(args.title)
+    wikiUsers: () => wikiDataController.getWikiUsers(),
+    wikiSections: () => wikiDataController.getWikiSections(),
+    wikiPages: (_, args, context) => wikiDataController.getWikiPages(resolveUserId(args, context)),
+    wikiPage: (_, args, context) => wikiDataController.getWikiPage(args.title, resolveUserId(args, context)),
+    wikiPageHistory: (_, args) => wikiDataController.getWikiPageHistory(args.title)
   },
   Mutation: {
-    createSection: (_, args, context) => dbController.createSection(args.input?.title, args.input, resolveUserId(args, context)),
-    updateSection: (_, args, context) => dbController.updateSection(args.title, args.input, resolveUserId(args, context)),
-    deleteSection: async (_, args, context) => {
-      await dbController.deleteSection(args.title, resolveUserId(args, context));
+    createWikiSection: (_, args, context) => wikiDataController.createWikiSection(args.input?.title, args.input, resolveUserId(args, context)),
+    updateWikiSection: (_, args, context) => wikiDataController.updateWikiSection(args.title, args.input, resolveUserId(args, context)),
+    deleteWikiSection: async (_, args, context) => {
+      await wikiDataController.deleteWikiSection(args.title, resolveUserId(args, context));
       return true;
     },
-    savePage: (_, args) => dbController.savePage(args.title, args.content, args.userId, args.sectionId),
-    approveRevision: (_, args) => dbController.approveRevision(args.title, args.index, args.userId),
-    rejectRevision: (_, args) => dbController.rejectRevision(args.title, args.index, args.userId),
-    revert: (_, args) => dbController.revert(args.title, args.version, args.userId)
+    saveWikiPage: (_, args) => wikiDataController.saveWikiPage(args.title, args.content, args.userId, args.sectionId),
+    approveWikiRevision: (_, args) => wikiDataController.approveWikiRevision(args.title, args.index, args.userId),
+    rejectWikiRevision: (_, args) => wikiDataController.rejectWikiRevision(args.title, args.index, args.userId),
+    revertWikiPage: (_, args) => wikiDataController.revertWikiPage(args.title, args.version, args.userId)
   }
 };
 

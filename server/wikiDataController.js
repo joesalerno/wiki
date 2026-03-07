@@ -1,4 +1,3 @@
-
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -205,7 +204,6 @@ async function loadData() {
     if (changed) await saveData(data);
     return data;
   } catch {
-    // If file doesn't exist, create it with seed data
     await saveData(SEED_DATA);
     return SEED_DATA;
   }
@@ -231,18 +229,18 @@ function getDefaultSectionTitle(data) {
   return Object.keys(data.sections || {})[0] || 'General';
 }
 
-export const dbController = {
-  async getUsers() {
+export const wikiDataController = {
+  async getWikiUsers() {
     const data = await loadData();
     return data.users;
   },
 
-  async getSections() {
+  async getWikiSections() {
     const data = await loadData();
     return Object.values(data.sections);
   },
 
-  async createSection(title, sectionData, userId) {
+  async createWikiSection(title, sectionData, userId) {
     const data = await loadData();
     await checkAdmin(userId, data);
 
@@ -254,7 +252,7 @@ export const dbController = {
     return data.sections[normalizedTitle];
   },
 
-  async updateSection(title, sectionData, userId) {
+  async updateWikiSection(title, sectionData, userId) {
     const data = await loadData();
     await checkAdmin(userId, data);
 
@@ -290,7 +288,7 @@ export const dbController = {
     return data.sections[nextTitle];
   },
 
-  async deleteSection(title, userId) {
+  async deleteWikiSection(title, userId) {
     const data = await loadData();
     await checkAdmin(userId, data);
 
@@ -312,29 +310,29 @@ export const dbController = {
     return { success: true };
   },
 
-  async getPages(userId) {
+  async getWikiPages(userId) {
     const data = await loadData();
     if (!userId) return [];
 
     const defaultSectionTitle = getDefaultSectionTitle(data);
 
     return Object.values(data.pages)
-      .filter(p => {
-        const section = data.sections[p.sectionId || defaultSectionTitle];
+      .filter(page => {
+        const section = data.sections[page.sectionId || defaultSectionTitle];
         return section && section.readUsers.includes(userId);
       })
-      .map(p => {
-        const head = p.revisions[0] || {};
+      .map(page => {
+        const head = page.revisions[0] || {};
         return {
-          title: p.title,
-          sectionId: p.sectionId,
+          title: page.title,
+          sectionId: page.sectionId,
           updatedAt: head.timestamp,
           authorId: head.authorId
         };
       });
   },
 
-  async getPage(title, userId) {
+  async getWikiPage(title, userId) {
     const data = await loadData();
     const page = data.pages[title];
     if (!page) return null;
@@ -350,7 +348,7 @@ export const dbController = {
     };
   },
 
-  async savePage(title, content, userId, sectionId) {
+  async saveWikiPage(title, content, userId, sectionId) {
     const data = await loadData();
     const normalizedTitle = title?.trim();
     if (!normalizedTitle) throw new Error('Title is required');
@@ -378,8 +376,8 @@ export const dbController = {
           pendingRevisions: []
         };
         data.pages[normalizedTitle] = page;
-      } else {
-        if (!page.pendingRevisions) page.pendingRevisions = [];
+      } else if (!page.pendingRevisions) {
+        page.pendingRevisions = [];
       }
 
       page.pendingRevisions.push({
@@ -395,7 +393,7 @@ export const dbController = {
     }
 
     const newRevision = {
-      version: (page && page.revisions.length > 0) ? page.revisions[0].version + 1 : 1,
+      version: page && page.revisions.length > 0 ? page.revisions[0].version + 1 : 1,
       content,
       authorId: userId,
       timestamp: Date.now()
@@ -419,37 +417,37 @@ export const dbController = {
     return { ...page, status: 'published' };
   },
 
-  async approveRevision(title, index, userId) {
+  async approveWikiRevision(title, index, userId) {
     const data = await loadData();
     const page = data.pages[title];
     if (!page || !page.pendingRevisions || !page.pendingRevisions[index]) {
       throw new Error('Revision not found');
     }
 
-    const pendingRev = page.pendingRevisions[index];
+    const pendingRevision = page.pendingRevisions[index];
     const defaultSectionTitle = getDefaultSectionTitle(data);
-    const section = data.sections[pendingRev.sectionId || page.sectionId || defaultSectionTitle];
+    const section = data.sections[pendingRevision.sectionId || page.sectionId || defaultSectionTitle];
 
     if (!section || !section.approverUsers.includes(userId)) {
       throw new Error('Permission denied');
     }
 
-    if (userId === pendingRev.authorId) {
+    if (userId === pendingRevision.authorId) {
       throw new Error('Cannot approve your own changes');
     }
 
     const newRevision = {
-      version: (page.revisions.length > 0) ? page.revisions[0].version + 1 : 1,
-      content: pendingRev.content,
-      authorId: pendingRev.authorId,
-      timestamp: pendingRev.timestamp,
+      version: page.revisions.length > 0 ? page.revisions[0].version + 1 : 1,
+      content: pendingRevision.content,
+      authorId: pendingRevision.authorId,
+      timestamp: pendingRevision.timestamp,
       approvedBy: userId,
       approvedAt: Date.now()
     };
 
     page.revisions.unshift(newRevision);
-    page.title = pendingRev.title;
-    if (pendingRev.sectionId) page.sectionId = pendingRev.sectionId;
+    page.title = pendingRevision.title;
+    if (pendingRevision.sectionId) page.sectionId = pendingRevision.sectionId;
 
     page.pendingRevisions.splice(index, 1);
 
@@ -457,16 +455,16 @@ export const dbController = {
     return page;
   },
 
-  async rejectRevision(title, index, userId) {
+  async rejectWikiRevision(title, index, userId) {
     const data = await loadData();
     const page = data.pages[title];
     if (!page || !page.pendingRevisions || !page.pendingRevisions[index]) {
       throw new Error('Revision not found');
     }
 
-    const pendingRev = page.pendingRevisions[index];
+    const pendingRevision = page.pendingRevisions[index];
     const defaultSectionTitle = getDefaultSectionTitle(data);
-    const section = data.sections[pendingRev.sectionId || page.sectionId || defaultSectionTitle];
+    const section = data.sections[pendingRevision.sectionId || page.sectionId || defaultSectionTitle];
 
     if (!section || !section.approverUsers.includes(userId)) {
       throw new Error('Permission denied');
@@ -478,20 +476,20 @@ export const dbController = {
     return page;
   },
 
-  async getHistory(title) {
-     const data = await loadData();
-     const page = data.pages[title];
-     return page ? page.revisions : [];
+  async getWikiPageHistory(title) {
+    const data = await loadData();
+    const page = data.pages[title];
+    return page ? page.revisions : [];
   },
 
-  async revert(title, version, userId) {
+  async revertWikiPage(title, version, userId) {
     const data = await loadData();
     const page = data.pages[title];
     if (!page) return null;
 
-    const targetRev = page.revisions.find(r => r.version === parseInt(version));
-    if (!targetRev) return null;
+    const targetRevision = page.revisions.find(revision => revision.version === parseInt(version));
+    if (!targetRevision) return null;
 
-    return await this.savePage(page.title, targetRev.content, userId, page.sectionId);
+    return this.saveWikiPage(page.title, targetRevision.content, userId, page.sectionId);
   }
 };

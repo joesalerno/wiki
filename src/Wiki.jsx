@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from './db';
+import { wikiApi } from './wikiApi';
 import './Wiki.css';
 
 // --- Markdown Parser (Minimal) ---
@@ -61,7 +61,7 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
                  <span style={{fontSize: '1.2rem', marginRight: '0.25rem'}}>↺</span> History
               </button>
               {(
-                <button title={canEdit ? "Edit Page" : "You do not have permission to edit this page"}  disabled={!canEdit} className="btn btn-sm btn-primary" onClick={onEdit} style={{ cursor: canEdit ? 'pointer' : 'not-allowed', backgroundColor: canEdit ? 'inherit' : '#6b7280', opacity: canEdit ? 1 : 0.5 }}>Edit Page</button>
+                <button title={canEdit ? "Edit Page" : "You do not have permission to edit this page"}  disabled={!canEdit} className="btn btn-sm btn-primary" onClick={onEdit} style={{ cursor: canEdit ? 'pointer' : 'not-allowed', backgroundColor: canEdit ? '#3b82f6' : '#6b7280', opacity: canEdit ? 1 : 0.5 }}>Edit Page</button>
               )}
            </div>
         </div>
@@ -271,7 +271,7 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
 
   useEffect(() => {
     if (page) {
-      db.getHistory(page.title).then(setRevisions);
+      wikiApi.getWikiPageHistory(page.title).then(setRevisions);
     }
   }, [page]);
 
@@ -403,9 +403,9 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
   const handleSave = async () => {
     try {
       if (editingId === 'new') {
-        await db.createSection(formData);
+        await wikiApi.createWikiSection(formData);
       } else {
-        await db.updateSection(editingId, formData);
+        await wikiApi.updateWikiSection(editingId, formData);
       }
       onUpdate();
       setEditingId(null);
@@ -417,7 +417,7 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
   const handleDelete = async (title) => {
     if (!window.confirm("Are you sure?")) return;
     try {
-      await db.deleteSection(title);
+      await wikiApi.deleteWikiSection(title);
       onUpdate();
     } catch (e) {
       alert(e.message);
@@ -648,9 +648,9 @@ export default function Wiki() {
   useEffect(() => {
     const initData = async () => {
       const [loadedUsers, loadedPages, loadedSections] = await Promise.all([
-         db.getUsers(),
-         db.getPages(),
-         db.getSections()
+        wikiApi.getWikiUsers(),
+        wikiApi.getWikiPages(),
+        wikiApi.getWikiSections()
       ]);
       setUsers(loadedUsers);
       const sectionMap = loadedSections.reduce((acc, section) => {
@@ -681,7 +681,7 @@ export default function Wiki() {
   useEffect(() => {
     const loadPage = async () => {
         if (currentPageTitle) {
-          const page = await db.getPage(currentPageTitle);
+          const page = await wikiApi.getWikiPage(currentPageTitle);
           setCurrentPageData(page);
       } else {
           setCurrentPageData(null);
@@ -757,7 +757,7 @@ export default function Wiki() {
             onApprove={async (index) => {
                if(window.confirm("Approve this revision?")) {
                   try {
-                    await db.approveRevision(currentPageData.title, index, currentUser.id);
+                  await wikiApi.approveWikiRevision(currentPageData.title, index, currentUser.id);
                       setTick(t => t + 1);
                   } catch(e) { alert(e.message); }
                }
@@ -765,7 +765,7 @@ export default function Wiki() {
             onReject={async (index) => {
                if(window.confirm("Reject this revision?")) {
                    try {
-                     await db.rejectRevision(currentPageData.title, index, currentUser.id);
+                     await wikiApi.rejectWikiRevision(currentPageData.title, index, currentUser.id);
                        setTick(t => t + 1);
                    } catch(e) { alert(e.message); }
                }
@@ -790,7 +790,7 @@ export default function Wiki() {
             onCancel={() => setViewMode('read')}
             onSave={async (title, content, sectionId) => {
               try {
-                const res = await db.savePage(title, content, currentUser.id, sectionId);
+                const res = await wikiApi.saveWikiPage(title, content, currentUser.id, sectionId);
                 if (res.status === 'pending') {
                     alert("Changes submitted for review.");
                 }
@@ -818,7 +818,7 @@ export default function Wiki() {
               if (exists) return alert("Page already exists");
 
               try {
-                const res = await db.savePage(normalizedTitle, content, currentUser.id, sectionId);
+                const res = await wikiApi.saveWikiPage(normalizedTitle, content, currentUser.id, sectionId);
                  if (res.status === 'pending') {
                     alert("Page submitted for review.");
                     // Go to home or stay?
@@ -840,7 +840,7 @@ export default function Wiki() {
             canRevert={canDelete}
             onRevert={async (version) => {
                if(window.confirm(`Are you sure you want to revert to version ${version}?`)) {
-                 await db.revert(currentPageData.title, version, currentUser.id);
+                 await wikiApi.revertWikiPage(currentPageData.title, version, currentUser.id);
                  setTick(t => t + 1);
                  setViewMode('read');
                }

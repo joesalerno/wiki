@@ -1,4 +1,3 @@
-
 const API_URL = 'http://localhost:3001/graphql';
 
 const gqlRequest = async (query, variables = {}, userId) => {
@@ -19,22 +18,22 @@ const gqlRequest = async (query, variables = {}, userId) => {
   return payload.data;
 };
 
-const getCurrentUserId = () => localStorage.getItem('wiki_user_id') || 'u3';
+const getCurrentWikiUserId = () => localStorage.getItem('wiki_user_id') || 'u3';
 
-export const db = {
-  async getUsers() {
+export const wikiApi = {
+  async getWikiUsers() {
     const data = await gqlRequest(
-      `query {
-        users { id name isAdmin }
+      `query GetWikiUsers {
+        wikiUsers { id name isAdmin }
       }`
     );
-    return data.users;
+    return data.wikiUsers;
   },
 
-  async getSections() {
+  async getWikiSections() {
     const data = await gqlRequest(
-      `query {
-        sections {
+      `query GetWikiSections {
+        wikiSections {
           title
           readUsers
           writeUsers
@@ -43,14 +42,14 @@ export const db = {
         }
       }`
     );
-    return data.sections;
+    return data.wikiSections;
   },
 
-  async createSection(data) {
-    const userId = getCurrentUserId();
+  async createWikiSection(sectionInput) {
+    const userId = getCurrentWikiUserId();
     const result = await gqlRequest(
-      `mutation CreateSection($input: SectionInput!, $userId: ID) {
-        createSection(input: $input, userId: $userId) {
+      `mutation CreateWikiSection($input: WikiSectionInput!, $userId: ID) {
+        createWikiSection(input: $input, userId: $userId) {
           title
           readUsers
           writeUsers
@@ -58,16 +57,16 @@ export const db = {
           reviewRequired
         }
       }`,
-      { input: data, userId }
+      { input: sectionInput, userId }
     );
-    return result.createSection;
+    return result.createWikiSection;
   },
 
-  async updateSection(title, data) {
-    const userId = getCurrentUserId();
+  async updateWikiSection(title, sectionInput) {
+    const userId = getCurrentWikiUserId();
     const result = await gqlRequest(
-      `mutation UpdateSection($title: String!, $input: SectionInput!, $userId: ID) {
-        updateSection(title: $title, input: $input, userId: $userId) {
+      `mutation UpdateWikiSection($title: String!, $input: WikiSectionInput!, $userId: ID) {
+        updateWikiSection(title: $title, input: $input, userId: $userId) {
           title
           readUsers
           writeUsers
@@ -75,27 +74,27 @@ export const db = {
           reviewRequired
         }
       }`,
-      { title, input: data, userId }
+      { title, input: sectionInput, userId }
     );
-    return result.updateSection;
+    return result.updateWikiSection;
   },
 
-  async deleteSection(title) {
-    const userId = getCurrentUserId();
+  async deleteWikiSection(title) {
+    const userId = getCurrentWikiUserId();
     const result = await gqlRequest(
-      `mutation DeleteSection($title: String!, $userId: ID) {
-        deleteSection(title: $title, userId: $userId)
+      `mutation DeleteWikiSection($title: String!, $userId: ID) {
+        deleteWikiSection(title: $title, userId: $userId)
       }`,
       { title, userId }
     );
-    return result.deleteSection;
+    return result.deleteWikiSection;
   },
 
-  async getPages() {
-    const userId = getCurrentUserId();
+  async getWikiPages() {
+    const userId = getCurrentWikiUserId();
     const data = await gqlRequest(
-      `query Pages($userId: ID) {
-        pages(userId: $userId) {
+      `query GetWikiPages($userId: ID) {
+        wikiPages(userId: $userId) {
           title
           sectionId
           updatedAt
@@ -105,14 +104,14 @@ export const db = {
       { userId },
       userId
     );
-    return data.pages;
+    return data.wikiPages;
   },
 
-  async getPage(title) {
-    const userId = getCurrentUserId();
+  async getWikiPage(title) {
+    const userId = getCurrentWikiUserId();
     const data = await gqlRequest(
-      `query Page($title: ID!, $userId: ID) {
-        page(title: $title, userId: $userId) {
+      `query GetWikiPage($title: ID!, $userId: ID) {
+        wikiPage(title: $title, userId: $userId) {
           title
           sectionId
           revisions {
@@ -143,13 +142,13 @@ export const db = {
       { title, userId },
       userId
     );
-    return data.page;
+    return data.wikiPage;
   },
 
-  async savePage(title, content, userId, sectionId) {
+  async saveWikiPage(title, content, userId, sectionId) {
     const data = await gqlRequest(
-      `mutation SavePage($title: String!, $content: String!, $userId: ID!, $sectionId: ID) {
-        savePage(title: $title, content: $content, userId: $userId, sectionId: $sectionId) {
+      `mutation SaveWikiPage($title: String!, $content: String!, $userId: ID!, $sectionId: ID) {
+        saveWikiPage(title: $title, content: $content, userId: $userId, sectionId: $sectionId) {
           title
           sectionId
           status
@@ -181,13 +180,13 @@ export const db = {
       { title, content, userId, sectionId },
       userId
     );
-    return data.savePage;
+    return data.saveWikiPage;
   },
 
-  async approveRevision(title, index, userId) {
+  async approveWikiRevision(title, index, userId) {
     const data = await gqlRequest(
-      `mutation ApproveRevision($title: ID!, $index: Int!, $userId: ID!) {
-        approveRevision(title: $title, index: $index, userId: $userId) {
+      `mutation ApproveWikiRevision($title: ID!, $index: Int!, $userId: ID!) {
+        approveWikiRevision(title: $title, index: $index, userId: $userId) {
           title
           sectionId
           revisions {
@@ -218,13 +217,13 @@ export const db = {
       { title, index, userId },
       userId
     );
-    return data.approveRevision;
+    return data.approveWikiRevision;
   },
 
-  async rejectRevision(title, index, userId) {
+  async rejectWikiRevision(title, index, userId) {
     const data = await gqlRequest(
-      `mutation RejectRevision($title: ID!, $index: Int!, $userId: ID!) {
-        rejectRevision(title: $title, index: $index, userId: $userId) {
+      `mutation RejectWikiRevision($title: ID!, $index: Int!, $userId: ID!) {
+        rejectWikiRevision(title: $title, index: $index, userId: $userId) {
           title
           sectionId
           revisions {
@@ -255,13 +254,13 @@ export const db = {
       { title, index, userId },
       userId
     );
-    return data.rejectRevision;
+    return data.rejectWikiRevision;
   },
 
-  async getHistory(title) {
+  async getWikiPageHistory(title) {
     const data = await gqlRequest(
-      `query History($title: ID!) {
-        history(title: $title) {
+      `query GetWikiPageHistory($title: ID!) {
+        wikiPageHistory(title: $title) {
           version
           content
           authorId
@@ -272,13 +271,13 @@ export const db = {
       }`,
       { title }
     );
-    return data.history;
+    return data.wikiPageHistory;
   },
 
-  async revert(title, version, userId) {
+  async revertWikiPage(title, version, userId) {
     const data = await gqlRequest(
-      `mutation Revert($title: ID!, $version: Int!, $userId: ID!) {
-        revert(title: $title, version: $version, userId: $userId) {
+      `mutation RevertWikiPage($title: ID!, $version: Int!, $userId: ID!) {
+        revertWikiPage(title: $title, version: $version, userId: $userId) {
           title
           sectionId
           revisions {
@@ -309,6 +308,6 @@ export const db = {
       { title, version, userId },
       userId
     );
-    return data.revert;
+    return data.revertWikiPage;
   }
 };
