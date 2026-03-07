@@ -325,12 +325,6 @@
   padding: 0.35rem 0.7rem;
 }
 
-.wiki-editor-toolbar-status {
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  margin-left: auto;
-}
-
 .wiki-input-text {
   width: 100%;
   padding: 0.5rem;

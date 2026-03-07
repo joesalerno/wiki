@@ -256,7 +256,7 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
           </div>
         )}
 
-        <div style={{borderBottom: '1px solid #e5e7eb', marginBottom: '1rem', display: 'flex', gap: '1rem'}}>
+        <div style={{borderBottom: '1px solid #e5e7eb', marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center'}}>
           <button
             onClick={() => setActiveTab('write')}
             style={{
@@ -298,13 +298,6 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
           <button type="button" className="btn btn-secondary" onClick={() => insertSnippet('[link text](https://example.com)')}>Link</button>
           <button type="button" className="btn btn-secondary" onClick={() => imageInputRef.current?.click()} disabled={isUploading}>Image</button>
           <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>File</button>
-          <span className="wiki-editor-toolbar-status">
-            {isUploading
-              ? 'Uploading...'
-              : !hasChanges
-                ? 'No unsaved changes.'
-                : 'Supports links, images, code blocks, quotes, lists, and checklists.'}
-          </span>
         </div>
 
         <input ref={imageInputRef} type="file" accept="image/*" hidden onChange={(event) => handleUpload(event, 'image')} />
