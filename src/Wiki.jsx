@@ -1,48 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { wikiApi } from './wikiApi';
+import { renderMarkdown } from './wikiMarkdown';
 import './Wiki.css';
-
-// --- Markdown Parser (Minimal) ---
-
-const parseMarkdown = (text) => {
-  if (!text) return null;
-  const lines = text.split('\n');
-
-  return lines.map((line, i) => {
-    // Headers
-    if (line.startsWith('# ')) return <h1 key={i}>{line.substring(2)}</h1>;
-    if (line.startsWith('## ')) return <h2 key={i}>{line.substring(3)}</h2>;
-    if (line.startsWith('### ')) return <h3 key={i}>{line.substring(4)}</h3>;
-
-    // Unordered List
-    if (line.startsWith('* ') || line.startsWith('- ')) {
-      return <li key={i} style={{listStylePosition: 'inside', marginLeft: '1rem'}}>{formatInline(line.substring(2))}</li>;
-    }
-
-    // Blockquote
-    if (line.startsWith('> ')) return <blockquote key={i}>{formatInline(line.substring(2))}</blockquote>;
-
-    // Empty line
-    if (line.trim() === '') return <div key={i} style={{height: '1rem'}} />;
-
-    // Paragraph
-    return <p key={i}>{formatInline(line)}</p>;
-  });
-};
-
-const formatInline = (text) => {
-  // Very basic inline formatting: **bold**, *italic*
-  const parts = text.split(/(\*\*.*?\*\*|\*.*?\*)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i}>{part.slice(2, -2)}</strong>;
-    }
-    if (part.startsWith('*') && part.endsWith('*')) {
-      return <em key={i}>{part.slice(1, -1)}</em>;
-    }
-    return part;
-  });
-};
 
 // --- Sub-components ---
 
@@ -132,7 +91,7 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
         </div>
 
         <div className="wiki-body">
-          {currentRevision ? parseMarkdown(currentRevision.content) : <p>This page has no content yet.</p>}
+          {currentRevision ? renderMarkdown(currentRevision.content) : <p>This page has no content yet.</p>}
         </div>
       </div>
     </div>
@@ -144,6 +103,66 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
   const [content, setContent] = useState(initialContent || '');
   const [sectionId, setSectionId] = useState(initialSectionId || (Object.keys(sections)[0]));
   const [activeTab, setActiveTab] = useState('write'); // 'write' or 'preview'
+  const [isUploading, setIsUploading] = useState(false);
+  const textareaRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const insertSnippet = (snippet, selectionOffset = snippet.length) => {
+    const textarea = textareaRef.current;
+    const start = textarea ? textarea.selectionStart : content.length;
+    const end = textarea ? textarea.selectionEnd : content.length;
+    const nextContent = `${content.slice(0, start)}${snippet}${content.slice(end)}`;
+
+    setContent(nextContent);
+
+    requestAnimationFrame(() => {
+      if (!textareaRef.current) return;
+      textareaRef.current.focus();
+      const nextCursor = start + selectionOffset;
+      textareaRef.current.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
+  const wrapSelection = (prefix, suffix = prefix, placeholder = 'text') => {
+    const textarea = textareaRef.current;
+    const start = textarea ? textarea.selectionStart : content.length;
+    const end = textarea ? textarea.selectionEnd : content.length;
+    const selection = content.slice(start, end) || placeholder;
+    const snippet = `${prefix}${selection}${suffix}`;
+    const selectionOffset = prefix.length + selection.length + suffix.length;
+    insertSnippet(snippet, selectionOffset);
+  };
+
+  const insertLineTemplate = (template) => {
+    const textarea = textareaRef.current;
+    const start = textarea ? textarea.selectionStart : content.length;
+    const prefix = start > 0 && !content.slice(0, start).endsWith('\n') ? '\n' : '';
+    const suffix = content.endsWith('\n') || !content ? '' : '\n';
+    insertSnippet(`${prefix}${template}${suffix}`);
+  };
+
+  const handleUpload = async (event, kind) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      setIsUploading(true);
+      const asset = await wikiApi.uploadWikiAsset(file);
+      const snippet = kind === 'image' && asset.isImage
+        ? asset.markdown
+        : asset.isImage && kind === 'file'
+          ? `[${asset.fileName}](${asset.url})`
+          : asset.markdown;
+      insertLineTemplate(snippet);
+      setActiveTab('write');
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   return (
     <div className="wiki-editor-container">
@@ -216,16 +235,34 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
           </button>
         </div>
 
+        <div className="wiki-editor-toolbar">
+          <button type="button" className="btn btn-secondary" onClick={() => wrapSelection('**', '**', 'bold text')}>Bold</button>
+          <button type="button" className="btn btn-secondary" onClick={() => wrapSelection('*', '*', 'italic text')}>Italic</button>
+          <button type="button" className="btn btn-secondary" onClick={() => wrapSelection('`', '`', 'inline code')}>Code</button>
+          <button type="button" className="btn btn-secondary" onClick={() => insertLineTemplate('- List item')}>List</button>
+          <button type="button" className="btn btn-secondary" onClick={() => insertLineTemplate('1. Ordered item')}>Numbered</button>
+          <button type="button" className="btn btn-secondary" onClick={() => insertLineTemplate('> Quote')}>Quote</button>
+          <button type="button" className="btn btn-secondary" onClick={() => insertLineTemplate('```\ncode\n```')}>Code Block</button>
+          <button type="button" className="btn btn-secondary" onClick={() => insertSnippet('[link text](https://example.com)')}>Link</button>
+          <button type="button" className="btn btn-secondary" onClick={() => imageInputRef.current?.click()} disabled={isUploading}>Image</button>
+          <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>File</button>
+          <span className="wiki-editor-toolbar-status">{isUploading ? 'Uploading...' : 'Supports links, images, code blocks, quotes, lists, and checklists.'}</span>
+        </div>
+
+        <input ref={imageInputRef} type="file" accept="image/*" hidden onChange={(event) => handleUpload(event, 'image')} />
+        <input ref={fileInputRef} type="file" hidden onChange={(event) => handleUpload(event, 'file')} />
+
         {activeTab === 'write' ? (
           <textarea
+            ref={textareaRef}
             className="wiki-editor-input"
-            placeholder="Write your content here... (Supports Markdown: #, *, -)"
+            placeholder="Write your content here... Supports headings, links, images, lists, blockquotes, code, and fenced code blocks."
             value={content}
             onChange={e => setContent(e.target.value)}
           />
         ) : (
           <div className="wiki-article" style={{flex: 1, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1rem'}}>
-             {parseMarkdown(content)}
+             {renderMarkdown(content)}
           </div>
         )}
       </div>
@@ -368,7 +405,7 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
 
                    {isFullOpen && (
                      <div style={{marginTop: '1rem', background: '#fff', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb'}}>
-                        {parseMarkdown(rev.content)}
+                        {renderMarkdown(rev.content)}
                      </div>
                    )}
                 </li>

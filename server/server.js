@@ -1,15 +1,75 @@
 
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs/promises';
+import path from 'path';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
+import { fileURLToPath } from 'url';
 import { wikiDataController } from './wikiDataController.js';
 
 const app = express();
 const PORT = 3001;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
+app.use('/uploads', express.static(UPLOAD_DIR));
+
+function sanitizeFileName(fileName) {
+  const trimmedName = (fileName || 'upload').trim();
+  const ext = path.extname(trimmedName);
+  const baseName = path.basename(trimmedName, ext);
+  const safeBaseName = baseName.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'upload';
+  const safeExt = ext.replace(/[^a-zA-Z0-9.]/g, '').toLowerCase();
+  return `${safeBaseName}${safeExt}`;
+}
+
+function buildAssetUrl(req, fileName) {
+  return `${req.protocol}://${req.get('host')}/uploads/${encodeURIComponent(fileName)}`;
+}
+
+app.post('/wiki-assets', async (req, res) => {
+  try {
+    const { fileName, contentBase64, mimeType } = req.body || {};
+
+    if (!fileName || !contentBase64 || !mimeType) {
+      return res.status(400).json({ error: 'fileName, contentBase64, and mimeType are required' });
+    }
+
+    const buffer = Buffer.from(contentBase64, 'base64');
+    if (!buffer.length) {
+      return res.status(400).json({ error: 'Uploaded file is empty' });
+    }
+
+    if (buffer.length > MAX_UPLOAD_BYTES) {
+      return res.status(413).json({ error: 'File too large. Maximum size is 10 MB.' });
+    }
+
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
+
+    const safeFileName = sanitizeFileName(fileName);
+    const stampedFileName = `${Date.now()}-${safeFileName}`;
+    const filePath = path.join(UPLOAD_DIR, stampedFileName);
+
+    await fs.writeFile(filePath, buffer);
+
+    const url = buildAssetUrl(req, stampedFileName);
+    const isImage = mimeType.startsWith('image/');
+
+    return res.status(201).json({
+      fileName: stampedFileName,
+      mimeType,
+      isImage,
+      url,
+      markdown: isImage ? `![${safeFileName}](${url})` : `[${safeFileName}](${url})`
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Failed to upload asset' });
+  }
+});
 
 const typeDefs = `#graphql
   type WikiUser {

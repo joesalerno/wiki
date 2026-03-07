@@ -1,4 +1,5 @@
 const API_URL = 'http://localhost:3001/graphql';
+const ASSET_URL = 'http://localhost:3001/wiki-assets';
 
 const gqlRequest = async (query, variables = {}, userId) => {
   const res = await fetch(API_URL, {
@@ -19,6 +20,13 @@ const gqlRequest = async (query, variables = {}, userId) => {
 };
 
 const getCurrentWikiUserId = () => localStorage.getItem('wiki_user_id') || 'u3';
+
+const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+  reader.readAsDataURL(file);
+});
 
 export const wikiApi = {
   async getWikiUsers() {
@@ -309,5 +317,32 @@ export const wikiApi = {
       userId
     );
     return data.revertWikiPage;
+  },
+
+  async uploadWikiAsset(file) {
+    const dataUrl = await readFileAsDataUrl(file);
+    const [meta, contentBase64] = dataUrl.split(',');
+    const mimeMatch = meta?.match(/^data:(.*);base64$/);
+    const mimeType = mimeMatch?.[1] || file.type || 'application/octet-stream';
+
+    const response = await fetch(ASSET_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-ID': getCurrentWikiUserId()
+      },
+      body: JSON.stringify({
+        fileName: file.name,
+        mimeType,
+        contentBase64
+      })
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to upload asset');
+    }
+
+    return payload;
   }
 };

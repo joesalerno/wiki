@@ -208,6 +208,50 @@
 .wiki-article a { color: var(--primary); text-decoration: none; border-bottom: 1px solid transparent; }
 .wiki-article a:hover { border-bottom-color: var(--primary); }
 .wiki-article blockquote { border-left: 4px solid var(--border-color); padding-left: 1rem; margin: 1.5rem 0; color: var(--text-secondary); font-style: italic; }
+.wiki-article code {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  background: #f3f4f6;
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.35rem;
+  font-size: 0.92em;
+}
+.wiki-code-block {
+  background: #111827;
+  color: #f9fafb;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+}
+.wiki-code-block code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+.wiki-code-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9ca3af;
+  margin-bottom: 0.75rem;
+}
+.wiki-inline-image {
+  display: block;
+  max-width: 100%;
+  border-radius: 0.75rem;
+  margin: 1rem 0;
+  box-shadow: var(--shadow);
+}
+.wiki-rule {
+  border: 0;
+  border-top: 1px solid var(--border-color);
+  margin: 2rem 0;
+}
+.wiki-task-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 
 /* Editor */
 .wiki-editor-container {
@@ -236,6 +280,24 @@
 
 .wiki-editor-meta {
   margin-bottom: 1rem;
+}
+
+.wiki-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.wiki-editor-toolbar .btn {
+  padding: 0.35rem 0.7rem;
+}
+
+.wiki-editor-toolbar-status {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-left: auto;
 }
 
 .wiki-input-text {
@@ -291,4 +353,15 @@
   text-align: center;
   padding: 4rem 2rem;
   color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+  .wiki-content-area {
+    padding: 1.5rem;
+  }
+
+  .wiki-editor-toolbar-status {
+    width: 100%;
+    margin-left: 0;
+  }
 }
