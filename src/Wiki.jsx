@@ -107,6 +107,12 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
   const textareaRef = useRef(null);
   const imageInputRef = useRef(null);
   const fileInputRef = useRef(null);
+  const normalizedTitle = title.trim();
+  const isExistingPage = Boolean(page);
+  const hasChanges = isExistingPage
+    ? content !== (initialContent || '') || sectionId !== initialSectionId
+    : normalizedTitle.length > 0 || content.length > 0;
+  const canSave = !isUploading && hasChanges && (isExistingPage || normalizedTitle.length > 0);
 
   const insertSnippet = (snippet, selectionOffset = snippet.length) => {
     const textarea = textareaRef.current;
@@ -178,7 +184,14 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
 
            <div className="wiki-header-actions">
               <button className="btn btn-sm btn-secondary" onClick={onCancel}>Cancel</button>
-              <button className="btn btn-sm btn-primary" onClick={() => onSave(title, content, sectionId)}>Save Changes</button>
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={() => onSave(title, content, sectionId)}
+                disabled={!canSave}
+                title={!hasChanges ? 'No changes to save' : isUploading ? 'Upload in progress' : 'Save changes'}
+              >
+                Save Changes
+              </button>
            </div>
         </div>
 
@@ -246,7 +259,13 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
           <button type="button" className="btn btn-secondary" onClick={() => insertSnippet('[link text](https://example.com)')}>Link</button>
           <button type="button" className="btn btn-secondary" onClick={() => imageInputRef.current?.click()} disabled={isUploading}>Image</button>
           <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>File</button>
-          <span className="wiki-editor-toolbar-status">{isUploading ? 'Uploading...' : 'Supports links, images, code blocks, quotes, lists, and checklists.'}</span>
+          <span className="wiki-editor-toolbar-status">
+            {isUploading
+              ? 'Uploading...'
+              : !hasChanges
+                ? 'No unsaved changes.'
+                : 'Supports links, images, code blocks, quotes, lists, and checklists.'}
+          </span>
         </div>
 
         <input ref={imageInputRef} type="file" accept="image/*" hidden onChange={(event) => handleUpload(event, 'image')} />

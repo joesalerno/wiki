@@ -229,6 +229,26 @@ function getDefaultSectionTitle(data) {
   return Object.keys(data.sections || {})[0] || 'General';
 }
 
+function hasWikiPageChanges(page, nextContent, nextSectionId) {
+  if (!page) return true;
+
+  const currentContent = page.revisions?.[0]?.content || '';
+  const currentSectionId = page.sectionId;
+
+  if (currentContent !== nextContent) return true;
+  if (currentSectionId !== nextSectionId) return true;
+
+  return false;
+}
+
+function hasPendingWikiPageChanges(page, nextContent, nextSectionId) {
+  if (!Array.isArray(page?.pendingRevisions) || page.pendingRevisions.length === 0) {
+    return false;
+  }
+
+  return page.pendingRevisions.some(revision => revision.content === nextContent && revision.sectionId === nextSectionId);
+}
+
 export const wikiDataController = {
   async getWikiUsers() {
     const data = await loadData();
@@ -365,9 +385,17 @@ export const wikiDataController = {
     const canWrite = section.writeUsers.includes(userId);
     if (!canWrite) throw new Error('Permission denied');
 
+    if (!hasWikiPageChanges(page, content, targetSectionId)) {
+      throw new Error('No changes to save');
+    }
+
     const reviewRequired = section.reviewRequired || page?.reviewRequired;
 
     if (reviewRequired) {
+      if (hasPendingWikiPageChanges(page, content, targetSectionId)) {
+        throw new Error('No changes to save');
+      }
+
       if (!page) {
         page = {
           title: normalizedTitle,
