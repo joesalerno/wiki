@@ -99,6 +99,9 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
 }
 
 function PageEditor({ page, initialTitle, initialContent, initialSectionId, sections, onSave, onCancel }) {
+  const initialResolvedTitle = initialTitle || '';
+  const initialResolvedContent = initialContent || '';
+  const initialResolvedSectionId = initialSectionId || (sections[0]?.title || '');
   const [title, setTitle] = useState(initialTitle || '');
   const [content, setContent] = useState(initialContent || '');
   const [sectionId, setSectionId] = useState(initialSectionId || (sections[0]?.title || ''));
@@ -110,9 +113,9 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
   const normalizedTitle = title.trim();
   const isExistingPage = Boolean(page);
   const hasAvailableSection = sections.length > 0;
-  const hasChanges = isExistingPage
-    ? content !== (initialContent || '') || sectionId !== initialSectionId
-    : normalizedTitle.length > 0 || content.length > 0;
+  const hasChanges = title !== initialResolvedTitle
+    || content !== initialResolvedContent
+    || sectionId !== initialResolvedSectionId;
   const canSave = !isUploading && hasChanges && hasAvailableSection && (isExistingPage || normalizedTitle.length > 0);
 
   useEffect(() => {
@@ -123,9 +126,16 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
 
     const hasCurrentSection = sections.some(section => section.title === sectionId);
     if (!hasCurrentSection) {
-      setSectionId(initialSectionId || sections[0].title);
+      setSectionId(initialResolvedSectionId);
     }
-  }, [initialSectionId, sectionId, sections]);
+  }, [initialResolvedSectionId, sectionId, sections]);
+
+  const handleReset = () => {
+    setTitle(initialResolvedTitle);
+    setContent(initialResolvedContent);
+    setSectionId(initialResolvedSectionId);
+    setActiveTab('write');
+  };
 
   const insertSnippet = (snippet, selectionOffset = snippet.length) => {
     const textarea = textareaRef.current;
@@ -196,6 +206,7 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
            )}
 
            <div className="wiki-header-actions">
+              <button className="btn btn-sm btn-secondary" onClick={handleReset} disabled={!hasChanges || isUploading}>Reset</button>
               <button className="btn btn-sm btn-secondary" onClick={onCancel}>Cancel</button>
               <button
                 className="btn btn-sm btn-primary"
