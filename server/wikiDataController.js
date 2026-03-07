@@ -134,7 +134,7 @@ function normalizeData(data) {
     if (section.reviewRequired === undefined) section.reviewRequired = false;
   });
 
-  const defaultSectionTitle = Object.keys(data.sections)[0] || 'General';
+  const defaultSectionTitle = Object.keys(data.sections)[0] || '';
 
   if (data.pages && typeof data.pages === 'object') {
     const normalizedPages = {};
@@ -226,7 +226,7 @@ function getUserById(data, userId) {
 }
 
 function getDefaultSectionTitle(data) {
-  return Object.keys(data.sections || {})[0] || 'General';
+  return Object.keys(data.sections || {})[0] || '';
 }
 
 function hasWikiPageChanges(page, nextContent, nextSectionId) {

@@ -170,6 +170,12 @@
   color: white;
 }
 
+.btn:disabled,
+.btn-text:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .wiki-content-area {
   flex: 1;
   overflow-y: auto;
@@ -196,6 +202,31 @@
   display: flex;
   gap: 0.5rem;
   align-items: center;
+}
+
+.wiki-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  margin: 1rem 1.5rem 0;
+  border-radius: var(--radius);
+}
+
+.wiki-banner-error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.wiki-inline-notice {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
 }
 
 /* Typography for Viewer */

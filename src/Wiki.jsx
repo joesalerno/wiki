@@ -101,7 +101,7 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
 function PageEditor({ page, initialTitle, initialContent, initialSectionId, sections, onSave, onCancel }) {
   const [title, setTitle] = useState(initialTitle || '');
   const [content, setContent] = useState(initialContent || '');
-  const [sectionId, setSectionId] = useState(initialSectionId || (Object.keys(sections)[0]));
+  const [sectionId, setSectionId] = useState(initialSectionId || (sections[0]?.title || ''));
   const [activeTab, setActiveTab] = useState('write'); // 'write' or 'preview'
   const [isUploading, setIsUploading] = useState(false);
   const textareaRef = useRef(null);
@@ -109,10 +109,23 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
   const fileInputRef = useRef(null);
   const normalizedTitle = title.trim();
   const isExistingPage = Boolean(page);
+  const hasAvailableSection = sections.length > 0;
   const hasChanges = isExistingPage
     ? content !== (initialContent || '') || sectionId !== initialSectionId
     : normalizedTitle.length > 0 || content.length > 0;
-  const canSave = !isUploading && hasChanges && (isExistingPage || normalizedTitle.length > 0);
+  const canSave = !isUploading && hasChanges && hasAvailableSection && (isExistingPage || normalizedTitle.length > 0);
+
+  useEffect(() => {
+    if (!sections.length) {
+      if (sectionId !== '') setSectionId('');
+      return;
+    }
+
+    const hasCurrentSection = sections.some(section => section.title === sectionId);
+    if (!hasCurrentSection) {
+      setSectionId(initialSectionId || sections[0].title);
+    }
+  }, [initialSectionId, sectionId, sections]);
 
   const insertSnippet = (snippet, selectionOffset = snippet.length) => {
     const textarea = textareaRef.current;
@@ -188,7 +201,15 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
                 className="btn btn-sm btn-primary"
                 onClick={() => onSave(title, content, sectionId)}
                 disabled={!canSave}
-                title={!hasChanges ? 'No changes to save' : isUploading ? 'Upload in progress' : 'Save changes'}
+                title={
+                  !hasAvailableSection
+                    ? 'No writable sections available'
+                    : !hasChanges
+                      ? 'No changes to save'
+                      : isUploading
+                        ? 'Upload in progress'
+                        : 'Save changes'
+                }
               >
                 Save Changes
               </button>
@@ -210,12 +231,19 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
              style={{flex: 1}}
              value={sectionId}
              onChange={e => setSectionId(e.target.value)}
+             disabled={!hasAvailableSection}
           >
-             {Object.values(sections).map(s => (
+             {sections.map(s => (
                 <option key={s.title} value={s.title}>{s.title}</option>
              ))}
           </select>
         </div>
+
+        {!hasAvailableSection && (
+          <div className="wiki-inline-notice">
+            You do not have a writable section available for this page.
+          </div>
+        )}
 
         <div style={{borderBottom: '1px solid #e5e7eb', marginBottom: '1rem', display: 'flex', gap: '1rem'}}>
           <button
@@ -440,8 +468,10 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
 function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({});
+  const canManageSections = Boolean(currentUser?.isAdmin);
 
     const startEdit = (title, data) => {
+        if (!canManageSections) return;
         setEditingId(title);
         if (title === 'new') {
           setFormData({ title: '', readUsers: [], writeUsers: [], approverUsers: [], reviewRequired: false });
@@ -521,9 +551,15 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
           <button className="btn btn-sm btn-secondary" onClick={onClose}>Close</button>
         </div>
 
+        {!canManageSections && (
+          <div className="wiki-inline-notice">
+            Only admins can create, edit, or delete sections.
+          </div>
+        )}
+
         {!editingId && (
            <div style={{marginBottom: '1rem'}}>
-            <button className="btn btn-sm btn-primary" onClick={() => startEdit('new', {})}>
+            <button className="btn btn-sm btn-primary" onClick={() => startEdit('new', {})} disabled={!canManageSections}>
               + Create New Section
             </button>
            </div>
@@ -555,17 +591,17 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
                     {s.reviewRequired && <div style={{fontSize: '0.75rem', color: '#dc2626'}}>Review Required (Approvers: {s.approverUsers.join(', ')})</div>}
                   </td>
                   <td style={{padding: '0.5rem'}}>
-                    <button className="btn-text" onClick={() => startEdit(s.title, s)}>Edit</button>
+                    <button className="btn-text" onClick={() => startEdit(s.title, s)} disabled={!canManageSections}>Edit</button>
                     <button
                       className="btn-text"
-                      style={{color: '#9ca3af', marginLeft: '0.5rem', cursor: currentUser?.isAdmin ? 'pointer' : 'not-allowed'}}
-                      onClick={() => currentUser?.isAdmin && handleDelete(s.title)}
-                      disabled={!currentUser?.isAdmin}
-                      title={currentUser?.isAdmin ? 'Delete Section' : "You don't have permission to delete sections"}
+                      style={{color: '#9ca3af', marginLeft: '0.5rem', cursor: canManageSections ? 'pointer' : 'not-allowed'}}
+                      onClick={() => canManageSections && handleDelete(s.title)}
+                      disabled={!canManageSections}
+                      title={canManageSections ? 'Delete Section' : "You don't have permission to delete sections"}
                     >
                       Delete
                     </button>
-                    {!currentUser?.isAdmin && (
+                    {!canManageSections && (
                       <div style={{fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.25rem'}}>
                       You don't have permission to delete sections.
                       </div>
@@ -581,7 +617,7 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
   );
 }
 
-function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage, currentUser, users, onSwitchUser, onOpenAdmin }) {
+function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage, currentUser, users, onSwitchUser, onOpenAdmin, canCreatePage, canManageSections }) {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredPages = pages.filter(page =>
@@ -628,7 +664,15 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
         </select>
         <div style={{marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
           <span>Role: {currentUser?.isAdmin ? 'Admin' : 'Member'}</span>
-          <button className="btn-text" style={{fontSize: '0.75rem', color: '#2563eb', fontWeight: 600}} onClick={onOpenAdmin}>Sections</button>
+          <button
+            className="btn-text"
+            style={{fontSize: '0.75rem', color: '#2563eb', fontWeight: 600, cursor: canManageSections ? 'pointer' : 'not-allowed'}}
+            onClick={onOpenAdmin}
+            disabled={!canManageSections}
+            title={canManageSections ? 'Manage Sections' : 'Only admins can manage sections'}
+          >
+            Sections
+          </button>
         </div>
       </div>
 
@@ -647,7 +691,8 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
             onClick={onCreatePage}
             className="btn btn-secondary"
             style={{padding: '0.2rem 0.5rem', fontSize: '0.8rem'}}
-            title="New Page"
+            title={canCreatePage ? 'New Page' : 'No writable sections available'}
+            disabled={!canCreatePage}
           >
             +
           </button>
@@ -698,37 +743,50 @@ export default function Wiki() {
   const [currentPageData, setCurrentPageData] = useState(null);
   const [viewMode, setViewMode] = useState('read'); // read, edit, history, new, admin
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
   const [tick, setTick] = useState(0); // Force update trigger
 
   // Load Initial Data
   useEffect(() => {
     const initData = async () => {
-      const [loadedUsers, loadedPages, loadedSections] = await Promise.all([
-        wikiApi.getWikiUsers(),
-        wikiApi.getWikiPages(),
-        wikiApi.getWikiSections()
-      ]);
-      setUsers(loadedUsers);
-      const sectionMap = loadedSections.reduce((acc, section) => {
-        acc[section.title] = section;
-        return acc;
-      }, {});
+      try {
+        setLoading(true);
+        const [loadedUsers, loadedPages, loadedSections] = await Promise.all([
+          wikiApi.getWikiUsers(),
+          wikiApi.getWikiPages(),
+          wikiApi.getWikiSections()
+        ]);
+        setUsers(loadedUsers);
+        const sectionMap = loadedSections.reduce((acc, section) => {
+          acc[section.title] = section;
+          return acc;
+        }, {});
 
-      let initialUser = currentUser;
-      if (!initialUser) {
-          const storedId = localStorage.getItem('wiki_user_id');
-          if (storedId) initialUser = loadedUsers.find(u => u.id === storedId);
+        let initialUser = currentUser;
+        if (!initialUser) {
+            const storedId = localStorage.getItem('wiki_user_id');
+            if (storedId) initialUser = loadedUsers.find(u => u.id === storedId);
+        }
+        if (!initialUser) initialUser = loadedUsers[0] || null;
+
+        if (initialUser && (!currentUser || currentUser.id !== initialUser.id)) {
+            setCurrentUser(initialUser);
+            localStorage.setItem('wiki_user_id', initialUser.id);
+        }
+
+        const nextPageTitle = loadedPages.some(page => page.title === currentPageTitle)
+          ? currentPageTitle
+          : (loadedPages[0]?.title || null);
+
+        setPages(loadedPages);
+        setSections(sectionMap);
+        setCurrentPageTitle(nextPageTitle);
+        setErrorMessage('');
+      } catch (error) {
+        setErrorMessage(error.message || 'Failed to load wiki data');
+      } finally {
+        setLoading(false);
       }
-      if (!initialUser) initialUser = loadedUsers[0];
-
-      if (initialUser && (!currentUser || currentUser.id !== initialUser.id)) {
-          setCurrentUser(initialUser);
-          localStorage.setItem('wiki_user_id', initialUser.id);
-      }
-
-      setPages(loadedPages);
-      setSections(sectionMap);
-      setLoading(false);
     };
     initData();
   }, [tick]); // Reload all data on tick
@@ -736,15 +794,27 @@ export default function Wiki() {
   // Update Current Page Data when dependencies change
   useEffect(() => {
     const loadPage = async () => {
+      try {
         if (currentPageTitle) {
           const page = await wikiApi.getWikiPage(currentPageTitle);
           setCurrentPageData(page);
-      } else {
+        } else {
           setCurrentPageData(null);
+        }
+      } catch (error) {
+        if (pages.length > 0) {
+          const fallbackPageTitle = pages[0]?.title || null;
+          if (fallbackPageTitle && fallbackPageTitle !== currentPageTitle) {
+            setCurrentPageTitle(fallbackPageTitle);
+            return;
+          }
+        }
+        setCurrentPageData(null);
+        setErrorMessage(error.message || 'Failed to load the selected page');
       }
     };
     loadPage();
-      }, [currentPageTitle, tick]);
+  }, [currentPageTitle, pages, tick]);
 
   const handleSwitchUser = (userId) => {
     const user = users.find(u => u.id === userId);
@@ -756,11 +826,13 @@ export default function Wiki() {
   };
 
   const handleSelectPage = (title) => {
+    setErrorMessage('');
     setCurrentPageTitle(title);
     setViewMode('read');
   };
 
   const handleCreatePage = () => {
+    setErrorMessage('');
     setCurrentPageTitle(null);
     setViewMode('new');
   };
@@ -773,6 +845,9 @@ export default function Wiki() {
       : false;
 
     const canDelete = currentUser && currentUser.isAdmin;
+    const writableSections = Object.values(sections).filter(section => currentUser && section.writeUsers.includes(currentUser.id));
+    const canCreatePage = writableSections.length > 0;
+    const canManageSections = Boolean(currentUser?.isAdmin);
 
   if (loading) return <div className="wiki-container">Loading...</div>;
 
@@ -787,10 +862,19 @@ export default function Wiki() {
         currentUser={currentUser}
         users={users}
         onSwitchUser={handleSwitchUser}
-        onOpenAdmin={() => setViewMode('admin')}
+        onOpenAdmin={() => canManageSections && setViewMode('admin')}
+        canCreatePage={canCreatePage}
+        canManageSections={canManageSections}
       />
 
       <main className="wiki-main">
+        {errorMessage && (
+          <div className="wiki-banner wiki-banner-error">
+            <span>{errorMessage}</span>
+            <button className="btn btn-secondary" onClick={() => setTick(t => t + 1)}>Retry</button>
+          </div>
+        )}
+
         {viewMode === 'admin' && (
             <AdminPanel
                 users={users}
@@ -842,7 +926,7 @@ export default function Wiki() {
             initialTitle={currentPageData.title}
             initialContent={currentPageData.currentRevision.content}
             initialSectionId={currentPageData.sectionId}
-            sections={sections}
+            sections={writableSections}
             onCancel={() => setViewMode('read')}
             onSave={async (title, content, sectionId) => {
               try {
@@ -865,13 +949,14 @@ export default function Wiki() {
             initialTitle=""
             initialContent=""
             initialSectionId={null}
-            sections={sections}
+            sections={writableSections}
             onCancel={() => setViewMode('read')}
             onSave={async (title, content, sectionId) => {
               const normalizedTitle = title.trim();
               if (!normalizedTitle) return alert("Please enter a valid title");
               const exists = pages.some(p => p.title.toLowerCase() === normalizedTitle.toLowerCase());
               if (exists) return alert("Page already exists");
+              if (!sectionId) return alert("No writable section is available");
 
               try {
                 const res = await wikiApi.saveWikiPage(normalizedTitle, content, currentUser.id, sectionId);
@@ -896,9 +981,13 @@ export default function Wiki() {
             canRevert={canDelete}
             onRevert={async (version) => {
                if(window.confirm(`Are you sure you want to revert to version ${version}?`)) {
-                 await wikiApi.revertWikiPage(currentPageData.title, version, currentUser.id);
-                 setTick(t => t + 1);
-                 setViewMode('read');
+                 try {
+                   await wikiApi.revertWikiPage(currentPageData.title, version, currentUser.id);
+                   setTick(t => t + 1);
+                   setViewMode('read');
+                 } catch (e) {
+                   alert(e.message);
+                 }
                }
             }}
           />
