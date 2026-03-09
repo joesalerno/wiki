@@ -46,6 +46,77 @@ function formatReadGroups(items) {
   return items && items.length > 0 ? items.join(', ') : 'Anyone';
 }
 
+function formatWriteGroups(items) {
+  return items && items.length > 0 ? items.join(', ') : 'Anyone';
+}
+
+function formatApproverGroups(items) {
+  return items && items.length > 0 ? items.join(', ') : 'Anyone';
+}
+
+function SelectionChips({ items, emptyLabel }) {
+  if (!items || items.length === 0) {
+    return <div className="wiki-picker-empty">{emptyLabel}</div>;
+  }
+
+  return (
+    <div className="wiki-picker-chips">
+      {items.map(item => (
+        <span key={item} className="wiki-picker-chip">{item}</span>
+      ))}
+    </div>
+  );
+}
+
+function FilterableChecklist({
+  filterValue,
+  onFilterChange,
+  filterPlaceholder,
+  options,
+  selectedValues,
+  onToggle,
+  emptyResultsLabel,
+  selectedSummaryLabel,
+  emptySelectionLabel,
+  height = 220
+}) {
+  return (
+    <div className="wiki-picker">
+      {typeof onFilterChange === 'function' && (
+        <input
+          type="text"
+          className="wiki-search-input wiki-picker-filter"
+          placeholder={filterPlaceholder}
+          value={filterValue}
+          onChange={e => onFilterChange(e.target.value)}
+        />
+      )}
+      <div className="wiki-picker-list" style={{ maxHeight: `${height}px` }}>
+        {options.length === 0 ? (
+          <div className="wiki-picker-empty">{emptyResultsLabel}</div>
+        ) : options.map(option => {
+          const checked = selectedValues.includes(option.value);
+          return (
+            <label key={option.value} className={`wiki-picker-item ${checked ? 'selected' : ''}`}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggle(option.value)}
+              />
+              <div className="wiki-picker-item-body">
+                <div className="wiki-picker-item-title">{option.label}</div>
+                {option.description && <div className="wiki-picker-item-description">{option.description}</div>}
+              </div>
+            </label>
+          );
+        })}
+      </div>
+      <div className="wiki-picker-summary-label">{selectedSummaryLabel}</div>
+      <SelectionChips items={selectedValues} emptyLabel={emptySelectionLabel} />
+    </div>
+  );
+}
+
 // --- Sub-components ---
 
 function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onApprove, onReject, isApprover, currentUser }) {
@@ -527,6 +598,7 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
 }
 
 function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser }) {
+  const [activeTab, setActiveTab] = useState('groups');
   const [editingSectionId, setEditingSectionId] = useState(null);
   const [sectionFormData, setSectionFormData] = useState({});
   const [editingGroupName, setEditingGroupName] = useState(null);
@@ -537,7 +609,8 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
   const [permissionGroupFilter, setPermissionGroupFilter] = useState('');
   const canManageSections = Boolean(currentUser?.isAdmin);
   const groupOptions = Object.values(groups).sort((left, right) => left.name.localeCompare(right.name));
-  const filteredGroupOptions = groupOptions.filter(group => group.name.toLowerCase().includes(groupFilter.toLowerCase()));
+  const editableGroupOptions = groupOptions.filter(group => group.name.startsWith('wiki_'));
+  const filteredGroupOptions = editableGroupOptions.filter(group => group.name.toLowerCase().includes(groupFilter.toLowerCase()));
   const filteredUsers = users.filter(user => user.name.toLowerCase().includes(userFilter.toLowerCase()));
   const filteredPermissionGroups = groupOptions.filter(group => group.name.toLowerCase().includes(permissionGroupFilter.toLowerCase()));
   const groupUserNames = Object.fromEntries(
@@ -548,16 +621,42 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
         .join(', ')
     ])
   );
+  const isEditingGroup = editingGroupName !== null;
+  const isEditingSection = editingSectionId !== null;
+  const isEditing = isEditingGroup || isEditingSection;
+
+  const toggleSelectedValue = (values, value) => (
+    values.includes(value)
+      ? values.filter(entry => entry !== value)
+      : [...values, value]
+  );
+
+  const groupChecklistOptions = filteredPermissionGroups.map(group => ({
+    value: group.name,
+    label: group.name,
+    description: groupUserNames[group.name] || 'No members'
+  }));
+
+  const userChecklistOptions = filteredUsers.map(user => ({
+    value: user.id,
+    label: user.name,
+    description: formatList(user.groups || [])
+  }));
 
   const startEditSection = (title, data) => {
     if (!canManageSections) return;
 
+    setActiveTab('sections');
+    setEditingGroupName(null);
+    setUserFilter('');
     setEditingSectionId(title);
     if (title === 'new') {
       setSectionFormData({ title: '', readGroups: [], writeGroups: [], approverGroups: [], reviewRequired: false });
+      setPermissionGroupFilter('');
       return;
     }
 
+    setPermissionGroupFilter('');
     setSectionFormData({
       ...data,
       readGroups: data?.readGroups || [],
@@ -569,16 +668,29 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
 
   const startEditGroup = (name, data) => {
     if (!canManageSections) return;
+    if (name !== 'new' && !name.startsWith('wiki_')) return;
 
+    setActiveTab('groups');
+    setEditingSectionId(null);
+    setPermissionGroupFilter('');
     setEditingGroupName(name);
     if (name === 'new') {
       setGroupFormName('wiki_');
       setGroupMemberIds([]);
+      setUserFilter('');
       return;
     }
 
+    setUserFilter('');
     setGroupFormName(data?.name || name);
     setGroupMemberIds(data?.memberIds || []);
+  };
+
+  const stopEditing = () => {
+    setEditingSectionId(null);
+    setEditingGroupName(null);
+    setPermissionGroupFilter('');
+    setUserFilter('');
   };
 
   const handleSaveSection = async () => {
@@ -590,7 +702,7 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
       }
 
       onUpdate();
-      setEditingSectionId(null);
+      stopEditing();
     } catch (error) {
       alert(error.message);
     }
@@ -609,13 +721,14 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
 
   const handleSaveGroup = async () => {
     try {
-      const normalizedName = groupFormName.trim();
+      const trimmedName = groupFormName.trim();
+      const normalizedName = trimmedName.startsWith('wiki_') ? trimmedName : `wiki_${trimmedName.replace(/^wiki_/, '')}`;
       if (editingGroupName === 'new') {
         await wikiApi.createWikiGroup(normalizedName);
       }
       await wikiApi.updateWikiGroup(normalizedName, groupMemberIds);
       onUpdate();
-      setEditingGroupName(null);
+      stopEditing();
     } catch (error) {
       alert(error.message);
     }
@@ -634,44 +747,88 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
 
   const renderSectionForm = () => (
     <div className="admin-form">
-      <input
-        type="text"
-        placeholder="Title"
-        value={sectionFormData.title || ''}
-        onChange={e => setSectionFormData({ ...sectionFormData, title: e.target.value })}
-      />
-
-      <label>Read Groups:</label>
-      <div style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0.25rem 0 0.5rem' }}>
-        Leave empty to allow anyone to read the section.
+      <div className="wiki-admin-editor-header">
+        <div>
+          <h2 className="wiki-admin-editor-title">{editingSectionId === 'new' ? 'New Section' : `Editing ${editingSectionId}`}</h2>
+          <div className="wiki-admin-editor-subtitle">Configure section access by group. Leave read access empty to make the section public.</div>
+        </div>
       </div>
-      <input
-        type="text"
-        placeholder="Filter groups"
-        value={permissionGroupFilter}
-        onChange={e => setPermissionGroupFilter(e.target.value)}
-        style={{ marginBottom: '0.5rem' }}
-      />
-      <select
-        multiple
-        style={{ width: '100%', height: '100px' }}
-        value={sectionFormData.readGroups || []}
-        onChange={e => setSectionFormData({ ...sectionFormData, readGroups: Array.from(e.target.selectedOptions, option => option.value) })}
-      >
-        {filteredPermissionGroups.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}
-      </select>
 
-      <label>Write Groups:</label>
-      <select
-        multiple
-        style={{ width: '100%', height: '100px' }}
-        value={sectionFormData.writeGroups || []}
-        onChange={e => setSectionFormData({ ...sectionFormData, writeGroups: Array.from(e.target.selectedOptions, option => option.value) })}
-      >
-        {filteredPermissionGroups.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}
-      </select>
+      <div className="wiki-admin-field">
+        <label className="wiki-admin-label">Section Name</label>
+        <input
+          type="text"
+          placeholder="Section name"
+          value={sectionFormData.title || ''}
+          onChange={e => setSectionFormData({ ...sectionFormData, title: e.target.value })}
+        />
+      </div>
 
-      <div style={{ margin: '0.5rem 0' }}>
+      <div className="wiki-admin-field">
+        <label className="wiki-admin-label">Filter Available Groups</label>
+        <input
+          type="text"
+          className="wiki-search-input wiki-picker-filter"
+          placeholder="Search groups once and use the lists below"
+          value={permissionGroupFilter}
+          onChange={e => setPermissionGroupFilter(e.target.value)}
+        />
+      </div>
+
+      <div className="wiki-admin-picker-grid">
+        <div className="wiki-admin-field">
+          <label className="wiki-admin-label">Read Groups</label>
+          <div className="wiki-admin-help">Leave empty to allow anyone to read the section.</div>
+          <FilterableChecklist
+            options={groupChecklistOptions}
+            selectedValues={sectionFormData.readGroups || []}
+            onToggle={(value) => setSectionFormData({
+              ...sectionFormData,
+              readGroups: toggleSelectedValue(sectionFormData.readGroups || [], value)
+            })}
+            emptyResultsLabel="No groups match this filter."
+            selectedSummaryLabel="Selected read groups"
+            emptySelectionLabel="Anyone can read this section"
+            height={150}
+          />
+        </div>
+
+        <div className="wiki-admin-field">
+          <label className="wiki-admin-label">Write Groups</label>
+          <div className="wiki-admin-help">Leave empty to allow anyone to write in the section.</div>
+          <FilterableChecklist
+            options={groupChecklistOptions}
+            selectedValues={sectionFormData.writeGroups || []}
+            onToggle={(value) => setSectionFormData({
+              ...sectionFormData,
+              writeGroups: toggleSelectedValue(sectionFormData.writeGroups || [], value)
+            })}
+            emptyResultsLabel="No groups match this filter."
+            selectedSummaryLabel="Selected write groups"
+            emptySelectionLabel="Anyone can write in this section"
+            height={150}
+          />
+        </div>
+
+        <div className="wiki-admin-field wiki-admin-field-full">
+          <label className="wiki-admin-label">Approver Groups</label>
+          <div className="wiki-admin-help">Leave empty to allow anyone with access to approve revisions in the section.</div>
+          <FilterableChecklist
+            options={groupChecklistOptions}
+            selectedValues={sectionFormData.approverGroups || []}
+            onToggle={(value) => setSectionFormData({
+              ...sectionFormData,
+              approverGroups: toggleSelectedValue(sectionFormData.approverGroups || [], value)
+            })}
+            emptyResultsLabel="No groups match this filter."
+            selectedSummaryLabel="Selected approver groups"
+            emptySelectionLabel="Anyone can approve revisions in this section"
+            height={150}
+          />
+        </div>
+      </div>
+
+      <div className="wiki-admin-field" style={{ marginTop: '0.25rem' }}>
         <label>
           <input
             type="checkbox"
@@ -682,53 +839,71 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
         </label>
       </div>
 
-      <label>Approver Groups:</label>
-      <select
-        multiple
-        style={{ width: '100%', height: '100px' }}
-        value={sectionFormData.approverGroups || []}
-        onChange={e => setSectionFormData({ ...sectionFormData, approverGroups: Array.from(e.target.selectedOptions, option => option.value) })}
-      >
-        {filteredPermissionGroups.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}
-      </select>
-
       <div className="admin-actions" style={{ marginTop: '1rem' }}>
         <button className="btn btn-sm btn-primary" onClick={handleSaveSection}>Save</button>
-        <button className="btn btn-sm btn-secondary" onClick={() => setEditingSectionId(null)}>Cancel</button>
+        <button className="btn btn-sm btn-secondary" onClick={stopEditing}>Close Section Editor</button>
       </div>
     </div>
   );
 
   const renderGroupForm = () => (
     <div className="admin-form" style={{ marginBottom: '1.5rem' }}>
-      <input
-        type="text"
-        placeholder="wiki_group_name"
-        value={groupFormName}
-        disabled={editingGroupName !== 'new'}
-        onChange={e => setGroupFormName(e.target.value)}
-      />
+      <div className="wiki-admin-editor-header">
+        <div>
+          <h2 className="wiki-admin-editor-title">{editingGroupName === 'new' ? 'New Group' : `Editing ${editingGroupName}`}</h2>
+          <div className="wiki-admin-editor-subtitle">Create or update a wiki group and manage its members in one place.</div>
+        </div>
+      </div>
 
-      <label>Members:</label>
-      <input
-        type="text"
-        placeholder="Filter users"
-        value={userFilter}
-        onChange={e => setUserFilter(e.target.value)}
-        style={{ marginBottom: '0.5rem' }}
+      <div className="wiki-admin-field">
+        <label className="wiki-admin-label">Group Name</label>
+        {editingGroupName === 'new' ? (
+          <div className="wiki-prefixed-input">
+            <span className="wiki-prefixed-input-prefix">wiki_</span>
+            <input
+              type="text"
+              placeholder="group_name"
+              value={groupFormName.replace(/^wiki_/, '')}
+              onChange={e => setGroupFormName(`wiki_${e.target.value.replace(/^wiki_/, '')}`)}
+            />
+          </div>
+        ) : (
+          <input
+            type="text"
+            value={groupFormName}
+            disabled
+            readOnly
+          />
+        )}
+      </div>
+
+      <div className="wiki-admin-field">
+        <label className="wiki-admin-label">Filter Users</label>
+        <input
+          type="text"
+          className="wiki-search-input wiki-picker-filter"
+          placeholder="Search users by name"
+          value={userFilter}
+          onChange={e => setUserFilter(e.target.value)}
+        />
+      </div>
+
+      <div className="wiki-admin-field">
+        <label className="wiki-admin-label">Members</label>
+      <FilterableChecklist
+        options={userChecklistOptions}
+        selectedValues={groupMemberIds}
+        onToggle={(value) => setGroupMemberIds(toggleSelectedValue(groupMemberIds, value))}
+        emptyResultsLabel="No users match this filter."
+        selectedSummaryLabel="Selected members"
+        emptySelectionLabel="No members selected"
+        height={220}
       />
-      <select
-        multiple
-        style={{ width: '100%', height: '100px' }}
-        value={groupMemberIds}
-        onChange={e => setGroupMemberIds(Array.from(e.target.selectedOptions, option => option.value))}
-      >
-        {filteredUsers.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
-      </select>
+      </div>
 
       <div className="admin-actions" style={{ marginTop: '1rem' }}>
         <button className="btn btn-sm btn-primary" onClick={handleSaveGroup}>Save</button>
-        <button className="btn btn-sm btn-secondary" onClick={() => setEditingGroupName(null)}>Cancel</button>
+        <button className="btn btn-sm btn-secondary" onClick={stopEditing}>Close Group Editor</button>
       </div>
     </div>
   );
@@ -747,77 +922,105 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
           </div>
         )}
 
+        {isEditing && (
+          <div className="wiki-inline-notice" style={{ background: '#f9fafb', color: '#374151', borderColor: '#e5e7eb' }}>
+            You can edit one thing at a time. Finish or close the current editor before opening another.
+          </div>
+        )}
+
+        <div className="wiki-admin-tabs" role="tablist" aria-label="Management tabs">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'groups'}
+            className={`wiki-admin-tab ${activeTab === 'groups' ? 'active' : ''}`}
+            onClick={() => !isEditing && setActiveTab('groups')}
+            disabled={isEditing && !isEditingGroup}
+          >
+            Groups
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'sections'}
+            className={`wiki-admin-tab ${activeTab === 'sections' ? 'active' : ''}`}
+            onClick={() => !isEditing && setActiveTab('sections')}
+            disabled={isEditing && !isEditingSection}
+          >
+            Sections
+          </button>
+        </div>
+
+        {isEditingGroup && renderGroupForm()}
+        {isEditingSection && renderSectionForm()}
+
+        {!isEditing && activeTab === 'groups' && (
         <div style={{ marginBottom: '2rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h2 style={{ margin: 0, fontSize: '1rem' }}>Group Management</h2>
-            {!editingGroupName && (
-              <button className="btn btn-sm btn-primary" onClick={() => startEditGroup('new', {})} disabled={!canManageSections}>
-                + Create Wiki Group
-              </button>
-            )}
+            <button className="btn btn-sm btn-primary" onClick={() => startEditGroup('new', {})} disabled={!canManageSections}>
+              + Create Wiki Group
+            </button>
           </div>
 
           <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '1rem' }}>
-            Create wiki-specific groups with a wiki_ prefix and manage their memberships here. Section permissions can use any group returned by the backend.
+            Only wiki_ groups can be created or edited here. Section permissions can still use any backend group.
           </div>
 
-          {!editingGroupName && (
-            <input
-              type="text"
-              placeholder="Filter groups"
-              value={groupFilter}
-              onChange={e => setGroupFilter(e.target.value)}
-              style={{ marginBottom: '1rem', maxWidth: '320px' }}
-            />
-          )}
+          <input
+            type="text"
+            placeholder="Filter groups"
+            value={groupFilter}
+            onChange={e => setGroupFilter(e.target.value)}
+            style={{ marginBottom: '1rem', maxWidth: '320px' }}
+          />
 
-          {editingGroupName ? renderGroupForm() : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
-                  <th style={{ padding: '0.5rem' }}>Group</th>
-                  <th style={{ padding: '0.5rem' }}>Members</th>
-                  <th style={{ padding: '0.5rem' }}>Actions</th>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+            <thead>
+              <tr style={{ textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
+                <th style={{ padding: '0.5rem' }}>Group</th>
+                <th style={{ padding: '0.5rem' }}>Members</th>
+                <th style={{ padding: '0.5rem' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredGroupOptions.map(group => (
+                <tr key={group.name} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '0.5rem' }}>{group.name}</td>
+                  <td style={{ padding: '0.5rem' }}>{groupUserNames[group.name] || 'No members'}</td>
+                  <td style={{ padding: '0.5rem' }}>
+                    <button className="btn-text" onClick={() => startEditGroup(group.name, group)} disabled={!canManageSections}>Edit Members</button>
+                    <button
+                      className="btn-text"
+                      style={{ color: '#9ca3af', marginLeft: '0.5rem', cursor: canManageSections ? 'pointer' : 'not-allowed' }}
+                      onClick={() => canManageSections && handleDeleteGroup(group.name)}
+                      disabled={!canManageSections}
+                    >
+                      Delete
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filteredGroupOptions.map(group => (
-                  <tr key={group.name} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '0.5rem' }}>{group.name}</td>
-                    <td style={{ padding: '0.5rem' }}>{groupUserNames[group.name] || 'No members'}</td>
-                    <td style={{ padding: '0.5rem' }}>
-                      <button className="btn-text" onClick={() => startEditGroup(group.name, group)} disabled={!canManageSections}>Edit Members</button>
-                      {group.name.startsWith('wiki_') && (
-                        <button
-                          className="btn-text"
-                          style={{ color: '#9ca3af', marginLeft: '0.5rem', cursor: canManageSections ? 'pointer' : 'not-allowed' }}
-                          onClick={() => canManageSections && handleDeleteGroup(group.name)}
-                          disabled={!canManageSections}
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+              ))}
+              {filteredGroupOptions.length === 0 && (
+                <tr>
+                  <td colSpan="3" style={{ padding: '0.75rem 0.5rem', color: '#6b7280', fontStyle: 'italic' }}>
+                    No editable wiki_ groups found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
+        )}
 
-        {!editingSectionId && (
+        {!isEditing && activeTab === 'sections' && (
+        <div>
            <div style={{marginBottom: '1rem'}}>
             <button className="btn btn-sm btn-primary" onClick={() => startEditSection('new', {})} disabled={!canManageSections}>
               + Create New Section
             </button>
            </div>
-        )}
 
-        {editingSectionId ? (
-          <div style={{maxWidth: '500px'}}>
-            {renderSectionForm()}
-          </div>
-        ) : (
           <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem'}}>
             <thead>
               <tr style={{textAlign: 'left', borderBottom: '1px solid #e5e7eb'}}>
@@ -834,9 +1037,9 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
                     <div><strong>{s.title}</strong></div>
                     <div style={{fontSize: '0.8rem'}}>
                       <span style={{color: '#059669'}}>R: {formatReadGroups(s.readGroups)}</span> |
-                      <span style={{color: '#d97706'}}> W: {formatList(s.writeGroups)}</span>
+                      <span style={{color: '#d97706'}}> W: {formatWriteGroups(s.writeGroups)}</span>
                     </div>
-                    {s.reviewRequired && <div style={{fontSize: '0.75rem', color: '#dc2626'}}>Review Required (Approvers: {formatList(s.approverGroups)})</div>}
+                    {s.reviewRequired && <div style={{fontSize: '0.75rem', color: '#dc2626'}}>Review Required (Approvers: {formatApproverGroups(s.approverGroups)})</div>}
                   </td>
                   <td style={{padding: '0.5rem'}}>
                     <button className="btn-text" onClick={() => startEditSection(s.title, s)} disabled={!canManageSections}>Edit</button>
@@ -859,6 +1062,7 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
               ))}
             </tbody>
           </table>
+        </div>
         )}
       </div>
     </div>

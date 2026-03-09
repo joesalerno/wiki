@@ -333,9 +333,9 @@ function hasPendingWikiPageChanges(page, nextContent, nextSectionId) {
   return page.pendingRevisions.some(revision => revision.content === nextContent && revision.sectionId === nextSectionId);
 }
 
-function hasGroupPermission(data, groupNames, userId) {
+function hasGroupPermission(data, groupNames, userId, { allowPublicWhenEmpty = false } = {}) {
   if (!userId) return false;
-  if (!groupNames || groupNames.length === 0) return true;
+  if ((!groupNames || groupNames.length === 0) && allowPublicWhenEmpty) return true;
   const userGroups = new Set(getUserGroupNames(data, userId));
   return (groupNames || []).some(groupName => userGroups.has(groupName));
 }
@@ -394,8 +394,7 @@ export const wikiDataController = {
     const data = await loadData();
     await checkAdmin(userId, data);
 
-    const normalizedName = normalizeGroupName(name);
-    if (!normalizedName) throw new Error('Group name is required');
+    const normalizedName = requireWikiGroupName(name);
     if (!data.groups[normalizedName]) throw new Error('Group not found');
 
     data.groups[normalizedName] = {
@@ -530,7 +529,7 @@ export const wikiDataController = {
     return Object.values(data.pages)
       .filter(page => {
         const section = data.sections[page.sectionId || defaultSectionTitle];
-        return section && hasGroupPermission(data, section.readGroups, userId);
+        return section && hasGroupPermission(data, section.readGroups, userId, { allowPublicWhenEmpty: true });
       })
       .map(page => {
         const head = page.revisions[0] || {};
@@ -550,7 +549,7 @@ export const wikiDataController = {
 
     const defaultSectionTitle = getDefaultSectionTitle(data);
     const section = data.sections[page.sectionId || defaultSectionTitle];
-    if (!section || !hasGroupPermission(data, section.readGroups, userId)) {
+    if (!section || !hasGroupPermission(data, section.readGroups, userId, { allowPublicWhenEmpty: true })) {
       throw new Error('Permission denied');
     }
 
@@ -571,7 +570,7 @@ export const wikiDataController = {
     const section = data.sections[targetSectionId];
     if (!section) throw new Error('Invalid section');
     if (!getUserById(data, userId)) throw new Error('User not found');
-    if (!hasGroupPermission(data, section.writeGroups, userId)) throw new Error('Permission denied');
+    if (!hasGroupPermission(data, section.writeGroups, userId, { allowPublicWhenEmpty: true })) throw new Error('Permission denied');
     if (!hasWikiPageChanges(page, content, targetSectionId)) throw new Error('No changes to save');
 
     const reviewRequired = section.reviewRequired || page?.reviewRequired;
@@ -640,7 +639,7 @@ export const wikiDataController = {
     const pendingRevision = page.pendingRevisions[index];
     const defaultSectionTitle = getDefaultSectionTitle(data);
     const section = data.sections[pendingRevision.sectionId || page.sectionId || defaultSectionTitle];
-    if (!section || !hasGroupPermission(data, section.approverGroups, userId)) {
+    if (!section || !hasGroupPermission(data, section.approverGroups, userId, { allowPublicWhenEmpty: true })) {
       throw new Error('Permission denied');
     }
     if (userId === pendingRevision.authorId) {
@@ -675,7 +674,7 @@ export const wikiDataController = {
     const pendingRevision = page.pendingRevisions[index];
     const defaultSectionTitle = getDefaultSectionTitle(data);
     const section = data.sections[pendingRevision.sectionId || page.sectionId || defaultSectionTitle];
-    if (!section || !hasGroupPermission(data, section.approverGroups, userId)) {
+    if (!section || !hasGroupPermission(data, section.approverGroups, userId, { allowPublicWhenEmpty: true })) {
       throw new Error('Permission denied');
     }
 
