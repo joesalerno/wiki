@@ -26,20 +26,13 @@
         "u1",
         "u2"
       ]
-    },
-    "wiki_admin": {
-      "name": "wiki_admin",
-      "memberIds": []
     }
   },
   "sections": {
     "General": {
       "title": "General",
-      "readGroups": [
-        "wiki_admin"
-      ],
+      "readGroups": [],
       "writeGroups": [
-        "wiki_admin",
         "wiki_editors"
       ],
       "approverGroups": [],
@@ -48,16 +41,12 @@
     "Restricted Area": {
       "title": "Restricted Area",
       "readGroups": [
-        "wiki_admin",
         "wiki_editors"
       ],
       "writeGroups": [
-        "wiki_admin",
         "wiki_editors"
       ],
-      "approverGroups": [
-        "wiki_admin"
-      ],
+      "approverGroups": [],
       "reviewRequired": true
     }
   },
@@ -70,7 +59,7 @@
           "version": 1,
           "content": "# About This Wiki\n\nThis wiki is a lightweight knowledge base for shared notes, team docs, and internal reference pages.\n\n## Features\n\n- Browse pages by section and filter them with search\n- Write in Markdown with a built-in preview\n- Upload images and files directly into pages\n- Review revision history and compare older changes\n- Revert to an earlier version when needed\n- Control access with section-based read and write permissions\n- Route updates through approval when a section requires review\n\n## How to use it\n\n1. Open a page from the sidebar or create a new one.\n2. Edit in Markdown, then switch to Preview before saving.\n3. Use History to inspect changes or restore an older revision.\n4. In sections that require review, approvers can accept or reject pending edits.",
           "authorId": "u1",
-          "timestamp": 1773042113644
+          "timestamp": 1773098820172
         }
       ]
     },
@@ -82,7 +71,7 @@
           "version": 1,
           "content": "Shhh",
           "authorId": "u1",
-          "timestamp": 1773042113654
+          "timestamp": 1773098820172
         }
       ]
     },
@@ -95,7 +84,7 @@
           "content": "This is top secret.",
           "title": "Top Secret",
           "authorId": "u2",
-          "timestamp": 1773042175592,
+          "timestamp": 1773098820172,
           "sectionId": "Restricted Area"
         }
       ]
