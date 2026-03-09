@@ -26,44 +26,35 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
         </div>
 
         {pendingRevisions && pendingRevisions.length > 0 && (
-            <div style={{marginBottom: '1.5rem', border: '1px solid #f59e0b', backgroundColor: '#fffbeb', borderRadius: '0.5rem', padding: '1rem'}}>
-               <h3 style={{fontSize: '1rem', color: '#92400e', marginTop: 0}}>⚠️ Pending Revisions</h3>
-               <p style={{fontSize: '0.9rem', color: '#b45309'}}>
+          <div className="wiki-callout wiki-callout-warning">
+             <h3 className="wiki-callout-title">Pending revisions</h3>
+             <p className="wiki-callout-copy">
                   There are {pendingRevisions.length} changes waiting for approval.
                </p>
                {isApprover ? (
-                   <ul style={{listStyle: 'none', padding: 0, margin: '0.5rem 0 0'}}>
+               <ul className="wiki-pending-list">
                        {pendingRevisions.map((rev, idx) => (
-                           <li key={idx} style={{backgroundColor: 'white', padding: '0.5rem', marginBottom: '0.5rem', borderRadius: '0.25rem', border: '1px solid #e5e7eb'}}>
-                               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem'}}>
-                                   <div style={{fontSize: '0.85rem'}}>
+                   <li key={idx} className="wiki-pending-item">
+                     <div className="wiki-pending-header">
+                       <div className="wiki-pending-meta">
                                        <strong>{rev.authorId}</strong> proposed changes on {new Date(rev.timestamp).toLocaleString()}
                                    </div>
-                                   <div>
+                       <div className="wiki-pending-actions">
                                        <button
                                           className="btn btn-sm btn-primary"
-                                          style={{
-                                              marginRight: '0.5rem',
-                                              backgroundColor: currentUser?.id === rev.authorId ? '#9ca3af' : '#10b981',
-                                              borderColor: currentUser?.id === rev.authorId ? '#9ca3af' : '#059669',
-                                              cursor: currentUser?.id === rev.authorId ? 'not-allowed' : 'pointer'
-                                          }}
+                          data-state={currentUser?.id === rev.authorId ? 'muted' : 'success'}
                                           onClick={() => onApprove(idx)}
                                           disabled={currentUser?.id === rev.authorId}
                                           title={currentUser?.id === rev.authorId ? "Cannot approve own changes" : "Approve"}
                                        >
                                            Approve
                                        </button>
-                                       <button className="btn btn-sm btn-secondary" style={{color: '#dc2626', borderColor: '#fca5a5'}} onClick={() => onReject(idx)}>Reject</button>
+                                       <button className="btn btn-sm btn-secondary" data-tone="danger" onClick={() => onReject(idx)}>Reject</button>
                                    </div>
                                </div>
-                               <div style={{maxHeight: '200px', overflow: 'auto', border: '1px solid #eee', fontSize: '0.8rem', padding: '0.5rem', backgroundColor: '#f9fafb'}}>
+                               <div className="wiki-diff-panel">
                                    {computeDiff(currentRevision ? currentRevision.content : "", rev.content).map((line, k) => (
-                                     <div key={k} style={{
-                                       backgroundColor: line.type === 'added' ? '#dcfce7' : line.type === 'removed' ? '#fee2e2' : 'transparent',
-                                       color: line.type === 'removed' ? '#991b1b' : line.type === 'added' ? '#166534' : 'inherit',
-                                       whiteSpace: 'pre-wrap', fontFamily: 'monospace'
-                                     }}>
+                                     <div key={k} className={`wiki-diff-line ${line.type !== 'same' ? `is-${line.type}` : ''}`}>
                                        {line.type === 'added' ? '+ ' : line.type === 'removed' ? '- ' : '  '}
                                        {line.text}
                                      </div>
@@ -73,15 +64,15 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
                        ))}
                    </ul>
                ) : (
-                   <div style={{fontSize: '0.8rem', fontStyle: 'italic', color: '#b45309'}}>You do not have permission to approve these changes.</div>
+                   <div className="wiki-muted-note">You do not have permission to approve these changes.</div>
                )}
             </div>
         )}
 
-        <div style={{color: '#6b7280', fontSize: '0.85rem', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+        <div className="wiki-page-meta">
           {currentRevision && (
             <>
-              <span style={{backgroundColor: '#e5e7eb', color: '#374151', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 600, fontSize: '0.75rem'}}>
+              <span className="wiki-meta-chip">
                 v{currentRevision.version}
               </span>
               <span>Updated {new Date(currentRevision.timestamp).toLocaleDateString()} by {currentRevision.authorId}</span>
@@ -195,7 +186,7 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
 
   return (
     <div className="wiki-editor-container">
-      <div className="wiki-content-area" style={{display: 'flex', flexDirection: 'column', height: '100%'}}>
+      <div className="wiki-content-area wiki-editor-shell">
 
         <div className="wiki-header">
            {/* If creating a new page, title is editable, otherwise static header */}
@@ -227,19 +218,17 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
            </div>
         </div>
 
-        <div className="wiki-editor-meta" style={{display: 'flex', gap: '1rem'}}>
+        <div className="wiki-editor-meta">
           <input
             type="text"
-            className="wiki-input-text"
-            style={{flex: 2}}
+            className="wiki-input-text wiki-input-title"
             placeholder="Page Title"
             value={title}
             onChange={e => setTitle(e.target.value)}
             disabled={!!page}
           />
           <select
-             className="wiki-input-text"
-             style={{flex: 1}}
+             className="wiki-input-text wiki-input-section"
              value={sectionId}
              onChange={e => setSectionId(e.target.value)}
              disabled={!hasAvailableSection}
@@ -256,32 +245,18 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
           </div>
         )}
 
-        <div style={{borderBottom: '1px solid #e5e7eb', marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center'}}>
+        <div className="wiki-editor-tabs">
           <button
+            type="button"
+            className={`wiki-tab ${activeTab === 'write' ? 'is-active' : ''}`}
             onClick={() => setActiveTab('write')}
-            style={{
-              padding: '0.5rem 1rem',
-              border: 'none',
-              background: 'none',
-              borderBottom: activeTab === 'write' ? '2px solid #2563eb' : '2px solid transparent',
-              fontWeight: activeTab === 'write' ? 600 : 400,
-              cursor: 'pointer',
-              fontSize: '0.9rem'
-            }}
           >
             Write
           </button>
           <button
+            type="button"
+            className={`wiki-tab ${activeTab === 'preview' ? 'is-active' : ''}`}
             onClick={() => setActiveTab('preview')}
-            style={{
-              padding: '0.5rem 1rem',
-              border: 'none',
-              background: 'none',
-              borderBottom: activeTab === 'preview' ? '2px solid #2563eb' : '2px solid transparent',
-              fontWeight: activeTab === 'preview' ? 600 : 400,
-              cursor: 'pointer',
-              fontSize: '0.9rem'
-            }}
           >
             Preview
           </button>
@@ -312,7 +287,7 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
             onChange={e => setContent(e.target.value)}
           />
         ) : (
-          <div className="wiki-article" style={{flex: 1, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1rem'}}>
+          <div className="wiki-article wiki-preview-pane">
              {renderMarkdown(content)}
           </div>
         )}
@@ -400,8 +375,8 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
 
              return (
               <React.Fragment key={rev.version}>
-                <li className="history-item" style={{flexDirection: 'column', alignItems: 'stretch'}}>
-                   <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%'}}>
+                <li className="history-item">
+                   <div className="history-row">
                      <div className="history-meta">
                        <span className="history-version">Version {rev.version}</span>
                        <span className="history-author">
@@ -411,14 +386,12 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
                      <div className="history-actions">
                        <button
                          className="btn btn-secondary"
-                         style={{fontSize: '0.8rem', marginRight: '0.5rem'}}
                          onClick={() => handleToggleDiff(rev.version)}
                        >
                          {isDiffOpen ? 'Hide Changes' : 'Show Changes'}
                        </button>
                        <button
                          className="btn btn-secondary"
-                         style={{fontSize: '0.8rem', marginRight: '0.5rem'}}
                          onClick={() => handleToggleFull(rev.version)}
                        >
                          {isFullOpen ? 'Hide Full' : 'Show Full'}
@@ -427,26 +400,21 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
                        {canRevert && rev.version !== page.currentRevision.version && (
                          <button
                            className="btn btn-secondary"
-                           style={{fontSize: '0.8rem'}}
                            onClick={() => onRevert(rev.version)}
                          >
                            Revert to this
                          </button>
                        )}
                        {rev.version === page.currentRevision.version && (
-                         <span style={{fontSize: '0.8rem', color: 'green', fontWeight: 600, padding: '0.2rem 0.5rem'}}>Current</span>
+                         <span className="history-current">Current</span>
                        )}
                      </div>
                    </div>
 
                    {isDiffOpen && (
-                     <div style={{marginTop: '1rem', background: '#f9fafb', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb', fontSize: '0.9rem', fontFamily: 'monospace', whiteSpace: 'pre-wrap'}}>
+                     <div className="wiki-diff-panel history-panel">
                         {computeDiff(prevRev ? prevRev.content : "", rev.content).map((line, k) => (
-                          <div key={k} style={{
-                            backgroundColor: line.type === 'added' ? '#dcfce7' : line.type === 'removed' ? '#fee2e2' : 'transparent',
-                            color: line.type === 'removed' ? '#991b1b' : line.type === 'added' ? '#166534' : 'inherit',
-                            padding: '0 0.25rem'
-                          }}>
+                          <div key={k} className={`wiki-diff-line ${line.type !== 'same' ? `is-${line.type}` : ''}`}>
                             {line.type === 'added' ? '+ ' : line.type === 'removed' ? '- ' : '  '}
                             {line.text}
                           </div>
@@ -455,7 +423,7 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
                    )}
 
                    {isFullOpen && (
-                     <div style={{marginTop: '1rem', background: '#fff', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb'}}>
+                     <div className="wiki-preview-pane history-panel">
                         {renderMarkdown(rev.content)}
                      </div>
                    )}
@@ -519,28 +487,28 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
        <input type="text" placeholder="Title" value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} />
 
        <label>Read Users:</label>
-       <select multiple style={{width: '100%', height: '80px'}} value={formData.readUsers || []} onChange={e => setFormData({...formData, readUsers: Array.from(e.target.selectedOptions, o => o.value)})}>
+       <select multiple className="admin-multi-select" value={formData.readUsers || []} onChange={e => setFormData({...formData, readUsers: Array.from(e.target.selectedOptions, o => o.value)})}>
          {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
        </select>
 
        <label>Write Users:</label>
-       <select multiple style={{width: '100%', height: '80px'}} value={formData.writeUsers || []} onChange={e => setFormData({...formData, writeUsers: Array.from(e.target.selectedOptions, o => o.value)})}>
+       <select multiple className="admin-multi-select" value={formData.writeUsers || []} onChange={e => setFormData({...formData, writeUsers: Array.from(e.target.selectedOptions, o => o.value)})}>
          {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
        </select>
 
-       <div style={{margin: '0.5rem 0'}}>
-        <label>
+       <div className="admin-checkbox-row">
+        <label className="admin-checkbox-label">
           <input type="checkbox" checked={formData.reviewRequired || false} onChange={e => setFormData({...formData, reviewRequired: e.target.checked})} />
           Review Required
         </label>
        </div>
 
        <label>Approver Users:</label>
-       <select multiple style={{width: '100%', height: '80px'}} value={formData.approverUsers || []} onChange={e => setFormData({...formData, approverUsers: Array.from(e.target.selectedOptions, o => o.value)})}>
+       <select multiple className="admin-multi-select" value={formData.approverUsers || []} onChange={e => setFormData({...formData, approverUsers: Array.from(e.target.selectedOptions, o => o.value)})}>
          {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
        </select>
 
-       <div className="admin-actions" style={{marginTop: '1rem'}}>
+       <div className="admin-actions">
         <button className="btn btn-sm btn-primary" onClick={handleSave}>Save</button>
         <button className="btn btn-sm btn-secondary" onClick={() => setEditingId(null)}>Cancel</button>
       </div>
@@ -562,7 +530,7 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
         )}
 
         {!editingId && (
-           <div style={{marginBottom: '1rem'}}>
+           <div className="admin-toolbar">
             <button className="btn btn-sm btn-primary" onClick={() => startEdit('new', {})} disabled={!canManageSections}>
               + Create New Section
             </button>
@@ -570,35 +538,35 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
         )}
 
         {editingId ? (
-          <div style={{maxWidth: '500px'}}>
+          <div className="admin-form-wrap">
             {renderSectionForm()}
           </div>
         ) : (
-          <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem'}}>
+          <table className="admin-table">
             <thead>
-              <tr style={{textAlign: 'left', borderBottom: '1px solid #e5e7eb'}}>
-                <th style={{padding: '0.5rem'}}>Title</th>
-                <th style={{padding: '0.5rem'}}>Details</th>
-                <th style={{padding: '0.5rem'}}>Actions</th>
+              <tr>
+                <th>Title</th>
+                <th>Details</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
                {Object.values(sections).map(s => (
-                <tr key={s.title} style={{borderBottom: '1px solid #f3f4f6'}}>
-                  <td style={{padding: '0.5rem'}}>{s.title}</td>
-                  <td style={{padding: '0.5rem'}}>
-                    <div><strong>{s.title}</strong></div>
-                    <div style={{fontSize: '0.8rem'}}>
-                      <span style={{color: '#059669'}}>R: {s.readUsers.join(', ')}</span> |
-                      <span style={{color: '#d97706'}}> W: {s.writeUsers.join(', ')}</span>
+                <tr key={s.title}>
+                  <td>{s.title}</td>
+                  <td>
+                    <div className="admin-summary"><strong>{s.title}</strong></div>
+                    <div className="admin-detail">
+                      <span className="admin-detail-read">R: {s.readUsers.join(', ')}</span>
+                      <span className="admin-detail-write">W: {s.writeUsers.join(', ')}</span>
                     </div>
-                    {s.reviewRequired && <div style={{fontSize: '0.75rem', color: '#dc2626'}}>Review Required (Approvers: {s.approverUsers.join(', ')})</div>}
+                    {s.reviewRequired && <div className="admin-review">Review Required (Approvers: {s.approverUsers.join(', ')})</div>}
                   </td>
-                  <td style={{padding: '0.5rem'}}>
+                  <td>
                     <button className="btn-text" onClick={() => startEdit(s.title, s)} disabled={!canManageSections}>Edit</button>
                     <button
                       className="btn-text"
-                      style={{color: '#9ca3af', marginLeft: '0.5rem', cursor: canManageSections ? 'pointer' : 'not-allowed'}}
+                      data-tone="muted"
                       onClick={() => canManageSections && handleDelete(s.title)}
                       disabled={!canManageSections}
                       title={canManageSections ? 'Delete Section' : "You don't have permission to delete sections"}
@@ -606,7 +574,7 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
                       Delete
                     </button>
                     {!canManageSections && (
-                      <div style={{fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.25rem'}}>
+                      <div className="admin-disabled-note">
                       You don't have permission to delete sections.
                       </div>
                     )}
@@ -652,11 +620,11 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
   return (
     <aside className="wiki-sidebar">
       <div className="wiki-brand">
-        <span>✨ ReactWiki</span>
+        <span>Wiki</span>
       </div>
 
       <div className="user-panel">
-        <label style={{display: 'block', fontSize: '0.8rem', color: '#6b7280', marginBottom: '0.5rem'}}>Signed in as</label>
+        <label className="wiki-field-label">Signed in as</label>
         <select
           className="user-select"
           value={currentUser?.id || ''}
@@ -666,12 +634,11 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
             <option key={u.id} value={u.id}>{u.name}</option>
           ))}
         </select>
-        <div style={{marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+        <div className="wiki-user-meta">
           <span>Role: {currentUser?.isAdmin ? 'Admin' : 'Member'}</span>
           {canManageSections && (
             <button
               className="btn-text"
-              style={{fontSize: '0.75rem', color: '#2563eb', fontWeight: 600}}
               onClick={onOpenAdmin}
               title="Manage Sections"
             >
@@ -688,14 +655,14 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
       />
-      <div className="wiki-nav" style={{marginTop: '2rem'}}>
+      <div className="wiki-nav">
 
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
-          <span style={{fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase', color: '#9ca3af', letterSpacing: '0.05em'}}>Pages</span>
+        <div className="wiki-nav-header">
+          <span className="wiki-nav-label">Pages</span>
           <button
             onClick={onCreatePage}
             className="btn btn-secondary"
-            style={{padding: '0.2rem 0.5rem', fontSize: '0.8rem'}}
+            data-size="compact"
             title={canCreatePage ? 'New Page' : 'No writable sections available'}
             disabled={!canCreatePage}
           >
@@ -705,11 +672,11 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
 
         <div className="wiki-nav-list">
           {Object.keys(pagesBySection).map(secId => (
-            <div key={secId} style={{marginBottom: '1rem'}}>
-               <div style={{fontSize: '0.8rem', fontWeight: 600, color: '#4b5563', padding: '0 0.5rem', marginBottom: '0.25rem'}}>
+            <div key={secId} className="wiki-section-group">
+               <div className="wiki-section-title">
                    {pagesBySection[secId].title}
                </div>
-               <ul>
+               <ul className="wiki-section-list">
                      {pagesBySection[secId].pages.map(page => (
                       <li key={page.title} className="wiki-nav-item">
                       <a
@@ -722,13 +689,13 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
                       </li>
                      ))}
                    {pagesBySection[secId].pages.length === 0 && (
-                       <li style={{color: '#9ca3af', fontSize: '0.8rem', paddingLeft: '0.5rem'}}>Empty</li>
+                       <li className="wiki-empty-label">Empty</li>
                    )}
                </ul>
             </div>
           ))}
           {Object.keys(pagesBySection).length === 0 && (
-             <div style={{color: '#6b7280', fontSize: '0.9rem', fontStyle: 'italic', padding: '0.5rem'}}>No accessible sections</div>
+             <div className="wiki-empty-label">No accessible sections</div>
           )}
         </div>
       </div>
@@ -854,7 +821,7 @@ export default function Wiki() {
     const canCreatePage = writableSections.length > 0;
     const canManageSections = Boolean(currentUser?.isAdmin);
 
-  if (loading) return <div className="wiki-container">Loading...</div>;
+  if (loading) return <div className="wiki-container wiki-loading-state">Loading...</div>;
 
   return (
     <div className="wiki-container">

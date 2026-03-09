@@ -1,22 +1,27 @@
-/* Reset and Base Styles */
-:root {
-  --bg-color: #f9fafb;
-  --text-color: #111827;
-  --primary-color: #2563eb;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+html {
+  color-scheme: light;
 }
 
 body {
   margin: 0;
-  padding: 0;
-  background-color: var(--bg-color);
-  color: var(--text-color);
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
+  min-width: 320px;
+  min-height: 100vh;
+  font-family: "Aptos", "Segoe UI", sans-serif;
+  color: #201c17;
+  background: #f6f2ea;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 #root {
-  height: 100%;
-  width: 100%;
+  min-height: 100vh;
 }
