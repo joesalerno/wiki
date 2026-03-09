@@ -29,14 +29,14 @@ const SEED_DATA = {
       readGroups: [],
       writeGroups: ['wiki_editors'],
       reviewRequired: false,
-      approverGroups: ['admin']
+      approverGroups: []
     },
     'Restricted Area': {
       title: 'Restricted Area',
       readGroups: ['wiki_editors'],
       writeGroups: ['wiki_editors'],
       reviewRequired: true,
-      approverGroups: ['admin']
+      approverGroups: []
     }
   },
   pages: {
