@@ -356,6 +356,7 @@ const computeDiff = (oldText, newText) => {
 function PageHistory({ page, onBack, onRevert, canRevert }) {
   const [revisions, setRevisions] = useState([]);
   const [expandedView, setExpandedView] = useState({ version: null, mode: null }); // mode: 'diff' | 'full'
+  const currentRevisionVersion = page?.currentRevision?.version ?? null;
 
   useEffect(() => {
     if (page) {
@@ -424,7 +425,7 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
                          {isFullOpen ? 'Hide Full' : 'Show Full'}
                        </button>
 
-                       {canRevert && rev.version !== page.currentRevision.version && (
+                       {canRevert && rev.version !== currentRevisionVersion && (
                          <button
                            className="btn btn-secondary"
                            style={{fontSize: '0.8rem'}}
@@ -433,7 +434,7 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
                            Revert to this
                          </button>
                        )}
-                       {rev.version === page.currentRevision.version && (
+                       {rev.version === currentRevisionVersion && (
                          <span style={{fontSize: '0.8rem', color: 'green', fontWeight: 600, padding: '0.2rem 0.5rem'}}>Current</span>
                        )}
                      </div>
@@ -842,6 +843,8 @@ export default function Wiki() {
     setViewMode('new');
   };
 
+  const currentPageContent = currentPageData?.currentRevision?.content || '';
+
   // Derived state for permissions
   // Logic: Check section permissions for current page.
     const currentSection = currentPageData ? sections[currentPageData.sectionId] : null;
@@ -929,7 +932,7 @@ export default function Wiki() {
           <PageEditor
             page={currentPageData}
             initialTitle={currentPageData.title}
-            initialContent={currentPageData.currentRevision.content}
+            initialContent={currentPageContent}
             initialSectionId={currentPageData.sectionId}
             sections={writableSections}
             onCancel={() => setViewMode('read')}
