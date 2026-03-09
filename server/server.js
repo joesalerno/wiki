@@ -75,14 +75,18 @@ const typeDefs = `#graphql
   type WikiUser {
     id: ID!
     name: String!
-    isAdmin: Boolean!
+  }
+
+  type WikiGroup {
+    name: String!
+    users: [WikiUser!]!
   }
 
   type WikiSection {
     title: String!
-    readUsers: [ID!]!
-    writeUsers: [ID!]!
-    approverUsers: [ID!]!
+    readGroups: [String!]!
+    writeGroups: [String!]!
+    approverGroups: [String!]!
     reviewRequired: Boolean!
   }
 
@@ -121,14 +125,16 @@ const typeDefs = `#graphql
 
   input WikiSectionInput {
     title: String!
-    readUsers: [ID!]!
-    writeUsers: [ID!]!
-    approverUsers: [ID!]!
+    readGroups: [String!]!
+    writeGroups: [String!]!
+    approverGroups: [String!]!
     reviewRequired: Boolean!
   }
 
   type Query {
     wikiUsers: [WikiUser!]!
+    groups: [WikiGroup!]!
+    wikiGroups: [WikiGroup!]!
     wikiSections: [WikiSection!]!
     wikiPages(userId: ID): [WikiPageSummary!]!
     wikiPage(title: ID!, userId: ID): WikiPage
@@ -136,6 +142,9 @@ const typeDefs = `#graphql
   }
 
   type Mutation {
+    createWikiGroup(name: String!, userId: ID): WikiGroup!
+    updateWikiGroup(name: String!, memberIds: [ID!]!, userId: ID): WikiGroup!
+    deleteWikiGroup(name: String!, userId: ID): Boolean!
     createWikiSection(input: WikiSectionInput!, userId: ID): WikiSection!
     updateWikiSection(title: String!, input: WikiSectionInput!, userId: ID): WikiSection!
     deleteWikiSection(title: String!, userId: ID): Boolean!
@@ -149,14 +158,28 @@ const typeDefs = `#graphql
 const resolveUserId = (args, context) => args.userId || context.userId || null;
 
 const resolvers = {
+  WikiGroup: {
+    users: async (group) => {
+      const users = await Promise.all((group.memberIds || []).map(userId => wikiDataController.getWikiUserById(userId)));
+      return users.filter(Boolean);
+    }
+  },
   Query: {
     wikiUsers: () => wikiDataController.getWikiUsers(),
+    groups: () => wikiDataController.getWikiGroups(),
+    wikiGroups: () => wikiDataController.getWikiGroups(),
     wikiSections: () => wikiDataController.getWikiSections(),
     wikiPages: (_, args, context) => wikiDataController.getWikiPages(resolveUserId(args, context)),
     wikiPage: (_, args, context) => wikiDataController.getWikiPage(args.title, resolveUserId(args, context)),
     wikiPageHistory: (_, args) => wikiDataController.getWikiPageHistory(args.title)
   },
   Mutation: {
+    createWikiGroup: (_, args, context) => wikiDataController.createWikiGroup(args.name, resolveUserId(args, context)),
+    updateWikiGroup: (_, args, context) => wikiDataController.updateWikiGroup(args.name, args.memberIds, resolveUserId(args, context)),
+    deleteWikiGroup: async (_, args, context) => {
+      await wikiDataController.deleteWikiGroup(args.name, resolveUserId(args, context));
+      return true;
+    },
     createWikiSection: (_, args, context) => wikiDataController.createWikiSection(args.input?.title, args.input, resolveUserId(args, context)),
     updateWikiSection: (_, args, context) => wikiDataController.updateWikiSection(args.title, args.input, resolveUserId(args, context)),
     deleteWikiSection: async (_, args, context) => {

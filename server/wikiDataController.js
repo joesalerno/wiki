@@ -4,31 +4,42 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = path.join(__dirname, 'wiki.json');
+const ADMIN_GROUPS = new Set(['admin', 'wiki_admin']);
 
 const SEED_DATA = {
   users: [
-    { id: 'u1', name: 'Alice (Admin)', isAdmin: true },
-    { id: 'u2', name: 'Bob (Editor)', isAdmin: false },
-    { id: 'u3', name: 'Charlie (Viewer)', isAdmin: false },
+    { id: 'u1', name: 'Alice (Admin)' },
+    { id: 'u2', name: 'Bob (Editor)' },
+    { id: 'u3', name: 'Charlie (Viewer)' }
   ],
+  groups: {
+    admin: {
+      name: 'admin',
+      memberIds: ['u1']
+    },
+    wiki_editors: {
+      name: 'wiki_editors',
+      memberIds: ['u1', 'u2']
+    }
+  },
   sections: {
-    'General': {
+    General: {
       title: 'General',
-      readUsers: ['u1', 'u2', 'u3'],
-      writeUsers: ['u1', 'u2'],
+      readGroups: [],
+      writeGroups: ['wiki_editors'],
       reviewRequired: false,
-      approverUsers: ['u1']
+      approverGroups: ['admin']
     },
     'Restricted Area': {
       title: 'Restricted Area',
-      readUsers: ['u1', 'u2'],
-      writeUsers: ['u1', 'u2'],
+      readGroups: ['wiki_editors'],
+      writeGroups: ['wiki_editors'],
       reviewRequired: true,
-      approverUsers: ['u1']
+      approverGroups: ['admin']
     }
   },
   pages: {
-    'Home': {
+    Home: {
       title: 'Home',
       sectionId: 'General',
       revisions: [
@@ -39,160 +50,228 @@ const SEED_DATA = {
           timestamp: Date.now()
         }
       ]
+    },
+    Secret: {
+      title: 'Secret',
+      sectionId: 'Restricted Area',
+      revisions: [
+        {
+          version: 1,
+          content: 'Shhh',
+          authorId: 'u1',
+          timestamp: Date.now()
+        }
+      ]
+    },
+    'Top Secret': {
+      title: 'Top Secret',
+      sectionId: 'Restricted Area',
+      revisions: [],
+      pendingRevisions: [
+        {
+          content: 'This is top secret.',
+          title: 'Top Secret',
+          authorId: 'u2',
+          timestamp: Date.now(),
+          sectionId: 'Restricted Area'
+        }
+      ]
     }
   }
 };
 
-function normalizeData(data) {
-  let changed = false;
+function dedupe(values) {
+  return [...new Set((values || []).filter(Boolean))];
+}
 
-  if (data.groups || Object.values(data.sections || {}).some(s => s.readGroups || s.writeGroups || s.approverGroups)) {
-    const users = (data.users || []).map(u => ({
-      id: u.id,
-      name: u.name,
-      isAdmin: Array.isArray(u.groups) ? u.groups.includes('admin') : Boolean(u.isAdmin)
-    }));
+function slugify(value) {
+  return (value || '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'group';
+}
 
-    const userIdsByGroup = new Map();
-    if (Array.isArray(data.users)) {
-      data.users.forEach(u => {
-        (u.groups || []).forEach(g => {
-          if (!userIdsByGroup.has(g)) userIdsByGroup.set(g, []);
-          userIdsByGroup.get(g).push(u.id);
-        });
-      });
-    }
+function normalizeUsers(users) {
+  return (Array.isArray(users) ? users : [])
+    .map(user => ({
+      id: user?.id,
+      name: user?.name || user?.id || 'Unknown User'
+    }))
+    .filter(user => user.id);
+}
 
-    const sections = {};
-    Object.values(data.sections || {}).forEach(section => {
-      const readUsers = (section.readGroups || []).flatMap(g => userIdsByGroup.get(g) || []);
-      const writeUsers = (section.writeGroups || []).flatMap(g => userIdsByGroup.get(g) || []);
-      const approverUsers = (section.approverGroups || []).flatMap(g => userIdsByGroup.get(g) || []);
+function normalizeGroupName(name) {
+  return (name || '').trim();
+}
 
-      const title = section.title || section.id;
-      if (!title) return;
+function ensureGroup(groups, name, memberIds = []) {
+  const normalizedName = normalizeGroupName(name);
+  if (!normalizedName) return;
 
-      sections[title] = {
-        title,
-        readUsers,
-        writeUsers,
-        reviewRequired: Boolean(section.reviewRequired),
-        approverUsers
-      };
-    });
-
-    data = {
-      ...data,
-      users,
-      sections,
-      groups: undefined
-    };
-    changed = true;
+  if (!groups[normalizedName]) {
+    groups[normalizedName] = { name: normalizedName, memberIds: [] };
   }
 
-  if (!Array.isArray(data.users)) {
-    data.users = [];
-    changed = true;
-  }
+  groups[normalizedName].memberIds = dedupe([
+    ...groups[normalizedName].memberIds,
+    ...memberIds
+  ]);
+}
 
-  if (!data.sections) {
-    data.sections = {};
-    changed = true;
-  }
+function normalizeGroups(rawGroups, validUserIds) {
+  const groups = {};
+  const sourceEntries = Array.isArray(rawGroups)
+    ? rawGroups.map(group => [group?.name, group])
+    : Object.entries(rawGroups || {});
 
-  if (!data.pages) {
-    data.pages = {};
-    changed = true;
-  }
+  sourceEntries.forEach(([key, group]) => {
+    const name = normalizeGroupName(group?.name || key);
+    if (!name || name === 'wiki_all') return;
 
-  const normalizedSections = {};
+    const memberIds = dedupe(group?.memberIds || group?.users || []).filter(userId => validUserIds.has(userId));
+    groups[name] = { name, memberIds };
+  });
+
+  return groups;
+}
+
+function buildLegacyPermissionGroupName(title, suffix) {
+  return `wiki_${slugify(title)}_${suffix}`;
+}
+
+function normalizeSections(rawSections, groups, validUserIds) {
+  const sections = {};
   const sectionIdToTitle = new Map();
-  Object.entries(data.sections).forEach(([key, section]) => {
+
+  Object.entries(rawSections || {}).forEach(([key, section]) => {
     if (!section) return;
-    const title = section.title || section.id || key;
+
+    const title = (section.title || section.id || key || '').trim();
     if (!title) return;
 
-    normalizedSections[title] = {
-      ...section,
-      title
+    let readGroups = Array.isArray(section.readGroups) ? dedupe(section.readGroups.map(normalizeGroupName)).filter(groupName => groupName !== 'wiki_all') : null;
+    let writeGroups = Array.isArray(section.writeGroups) ? dedupe(section.writeGroups.map(normalizeGroupName)) : null;
+    let approverGroups = Array.isArray(section.approverGroups) ? dedupe(section.approverGroups.map(normalizeGroupName)) : null;
+
+    if (!readGroups) {
+      readGroups = [];
+      const groupName = buildLegacyPermissionGroupName(title, 'read');
+      const memberIds = dedupe(section.readUsers || []).filter(userId => validUserIds.has(userId));
+      if (memberIds.length > 0) {
+        ensureGroup(groups, groupName, memberIds);
+        readGroups.push(groupName);
+      }
+    }
+
+    if (!writeGroups) {
+      writeGroups = [];
+      const groupName = buildLegacyPermissionGroupName(title, 'write');
+      const memberIds = dedupe(section.writeUsers || []).filter(userId => validUserIds.has(userId));
+      if (memberIds.length > 0) {
+        ensureGroup(groups, groupName, memberIds);
+        writeGroups.push(groupName);
+      }
+    }
+
+    if (!approverGroups) {
+      approverGroups = [];
+      const groupName = buildLegacyPermissionGroupName(title, 'approver');
+      const memberIds = dedupe(section.approverUsers || []).filter(userId => validUserIds.has(userId));
+      if (memberIds.length > 0) {
+        ensureGroup(groups, groupName, memberIds);
+        approverGroups.push(groupName);
+      }
+    }
+
+    [...readGroups, ...writeGroups, ...approverGroups].forEach(groupName => ensureGroup(groups, groupName));
+
+    sections[title] = {
+      title,
+      readGroups,
+      writeGroups,
+      approverGroups,
+      reviewRequired: Boolean(section.reviewRequired)
     };
-    delete normalizedSections[title].id;
 
     sectionIdToTitle.set(key, title);
-    if (section?.id) sectionIdToTitle.set(section.id, title);
+    if (section.id) sectionIdToTitle.set(section.id, title);
   });
 
-  if (Object.keys(normalizedSections).length !== Object.keys(data.sections).length || Object.values(data.sections).some(s => s?.id)) {
-    data.sections = normalizedSections;
-    changed = true;
-  }
+  return { sections, sectionIdToTitle };
+}
 
-  Object.values(data.sections).forEach(section => {
-    if (!Array.isArray(section.readUsers)) section.readUsers = [];
-    if (!Array.isArray(section.writeUsers)) section.writeUsers = [];
-    if (!Array.isArray(section.approverUsers)) section.approverUsers = [];
-    if (section.reviewRequired === undefined) section.reviewRequired = false;
-  });
+function normalizePages(rawPages, sectionIdToTitle, sectionTitles) {
+  const defaultSectionTitle = sectionTitles[0] || '';
+  const pages = {};
 
-  const defaultSectionTitle = Object.keys(data.sections)[0] || '';
+  Object.values(rawPages || {}).forEach(page => {
+    if (!page) return;
 
-  if (data.pages && typeof data.pages === 'object') {
-    const normalizedPages = {};
-    Object.values(data.pages).forEach(page => {
-      if (!page) return;
-      const title = page.title || page.slug || page.id;
-      if (!title) return;
+    const title = page.title || page.slug || page.id;
+    if (!title) return;
 
-      let normalizedSectionId = page.sectionId || page.sectionTitle || defaultSectionTitle;
-      if (sectionIdToTitle.has(normalizedSectionId)) {
-        normalizedSectionId = sectionIdToTitle.get(normalizedSectionId);
-      } else if (data.sections && data.sections[normalizedSectionId]) {
-        // ok
-      } else if (data.sections) {
-        const match = Object.values(data.sections).find(s => s.title === page.sectionId || s.title === page.sectionTitle);
-        if (match) normalizedSectionId = match.title;
-      }
-
-      const cleanedPage = {
-        ...page,
-        title,
-        sectionId: normalizedSectionId || defaultSectionTitle
-      };
-      delete cleanedPage.slug;
-      delete cleanedPage.id;
-
-      normalizedPages[title] = cleanedPage;
-    });
-
-    const originalCount = Object.keys(data.pages).length;
-    const normalizedCount = Object.keys(normalizedPages).length;
-    const pagesNeedUpdate = Object.values(data.pages).some(p => p?.slug || p?.id || p?.sectionTitle);
-    if (originalCount !== normalizedCount || pagesNeedUpdate) {
-      data.pages = normalizedPages;
-      changed = true;
+    let sectionId = page.sectionId || page.sectionTitle || defaultSectionTitle;
+    if (sectionIdToTitle.has(sectionId)) {
+      sectionId = sectionIdToTitle.get(sectionId);
     }
-  }
 
-  if (data.pages && typeof data.pages === 'object') {
-    Object.values(data.pages).forEach(page => {
-      if (!page) return;
-      if (!page.sectionId || !data.sections[page.sectionId]) {
-        page.sectionId = defaultSectionTitle;
-        changed = true;
-      }
+    if (!sectionTitles.includes(sectionId)) {
+      sectionId = defaultSectionTitle;
+    }
 
-      if (Array.isArray(page.pendingRevisions)) {
-        page.pendingRevisions.forEach(rev => {
-          if (!rev.sectionId || !data.sections[rev.sectionId]) {
-            rev.sectionId = page.sectionId || defaultSectionTitle;
-            changed = true;
-          }
-        });
-      }
-    });
-  }
+    const normalizedPage = {
+      ...page,
+      title,
+      sectionId: sectionId || defaultSectionTitle
+    };
 
-  return { data, changed };
+    delete normalizedPage.slug;
+    delete normalizedPage.id;
+    delete normalizedPage.sectionTitle;
+
+    if (!Array.isArray(normalizedPage.revisions)) {
+      normalizedPage.revisions = [];
+    }
+
+    if (Array.isArray(normalizedPage.pendingRevisions)) {
+      normalizedPage.pendingRevisions = normalizedPage.pendingRevisions.map(revision => ({
+        ...revision,
+        sectionId: sectionTitles.includes(revision?.sectionId) ? revision.sectionId : (normalizedPage.sectionId || defaultSectionTitle)
+      }));
+    }
+
+    pages[title] = normalizedPage;
+  });
+
+  return pages;
+}
+
+function normalizeData(rawData) {
+  const users = normalizeUsers(rawData?.users);
+  const validUserIds = new Set(users.map(user => user.id));
+  const groups = normalizeGroups(rawData?.groups, validUserIds);
+
+  (Array.isArray(rawData?.users) ? rawData.users : []).forEach(user => {
+    (user?.groups || []).forEach(groupName => ensureGroup(groups, groupName, [user.id]));
+    if (user?.isAdmin) ensureGroup(groups, 'admin', [user.id]);
+  });
+
+  const { sections, sectionIdToTitle } = normalizeSections(rawData?.sections, groups, validUserIds);
+  const sectionTitles = Object.keys(sections);
+  const pages = normalizePages(rawData?.pages, sectionIdToTitle, sectionTitles);
+
+  Object.values(groups).forEach(group => {
+    group.memberIds = dedupe(group.memberIds).filter(userId => validUserIds.has(userId));
+  });
+
+  return {
+    users,
+    groups,
+    sections,
+    pages
+  };
 }
 
 async function loadData() {
@@ -200,12 +279,12 @@ async function loadData() {
     await fs.access(DB_PATH);
     const raw = await fs.readFile(DB_PATH, 'utf-8');
     const parsed = JSON.parse(raw);
-    const { data, changed } = normalizeData(parsed);
-    if (changed) await saveData(data);
+    const data = normalizeData(parsed);
+    await saveData(data);
     return data;
   } catch {
     await saveData(SEED_DATA);
-    return SEED_DATA;
+    return normalizeData(SEED_DATA);
   }
 }
 
@@ -213,16 +292,24 @@ async function saveData(data) {
   await fs.writeFile(DB_PATH, JSON.stringify(data, null, 2));
 }
 
-async function checkAdmin(userId, data) {
-  if (!userId) throw new Error('Unauthorized');
-  const dbUser = data.users.find(u => u.id === userId);
-  if (!dbUser) throw new Error('User not found');
-  if (dbUser.isAdmin) return true;
-  throw new Error('Permission denied: Admin access required');
+function getUserById(data, userId) {
+  return data.users.find(user => user.id === userId);
 }
 
-function getUserById(data, userId) {
-  return data.users.find(u => u.id === userId);
+function getUserGroupNames(data, userId) {
+  return Object.values(data.groups)
+    .filter(group => group.memberIds.includes(userId))
+    .map(group => group.name);
+}
+
+function isAdminUser(data, userId) {
+  return getUserGroupNames(data, userId).some(groupName => ADMIN_GROUPS.has(groupName));
+}
+
+async function checkAdmin(userId, data) {
+  if (!userId) throw new Error('Unauthorized');
+  if (!getUserById(data, userId)) throw new Error('User not found');
+  if (!isAdminUser(data, userId)) throw new Error('Permission denied: Admin access required');
 }
 
 function getDefaultSectionTitle(data) {
@@ -235,10 +322,7 @@ function hasWikiPageChanges(page, nextContent, nextSectionId) {
   const currentContent = page.revisions?.[0]?.content || '';
   const currentSectionId = page.sectionId;
 
-  if (currentContent !== nextContent) return true;
-  if (currentSectionId !== nextSectionId) return true;
-
-  return false;
+  return currentContent !== nextContent || currentSectionId !== nextSectionId;
 }
 
 function hasPendingWikiPageChanges(page, nextContent, nextSectionId) {
@@ -249,15 +333,100 @@ function hasPendingWikiPageChanges(page, nextContent, nextSectionId) {
   return page.pendingRevisions.some(revision => revision.content === nextContent && revision.sectionId === nextSectionId);
 }
 
+function hasGroupPermission(data, groupNames, userId) {
+  if (!userId) return false;
+  if (!groupNames || groupNames.length === 0) return true;
+  const userGroups = new Set(getUserGroupNames(data, userId));
+  return (groupNames || []).some(groupName => userGroups.has(groupName));
+}
+
+function requireWikiGroupName(name) {
+  const normalizedName = normalizeGroupName(name);
+  if (!normalizedName) throw new Error('Group name is required');
+  if (!normalizedName.startsWith('wiki_')) {
+    throw new Error('New wiki groups must start with wiki_');
+  }
+  return normalizedName;
+}
+
+function sanitizeMemberIds(memberIds, data) {
+  const validUserIds = new Set(data.users.map(user => user.id));
+  return dedupe(memberIds).filter(userId => validUserIds.has(userId));
+}
+
 export const wikiDataController = {
+  getWikiUserById(userId) {
+    return loadData().then(data => getUserById(data, userId));
+  },
+
   async getWikiUsers() {
     const data = await loadData();
-    return data.users;
+    return [...data.users].sort((left, right) => left.name.localeCompare(right.name));
+  },
+
+  async getWikiGroups() {
+    const data = await loadData();
+    return Object.values(data.groups).sort((left, right) => left.name.localeCompare(right.name));
   },
 
   async getWikiSections() {
     const data = await loadData();
-    return Object.values(data.sections);
+    return Object.values(data.sections).sort((left, right) => left.title.localeCompare(right.title));
+  },
+
+  async createWikiGroup(name, userId) {
+    const data = await loadData();
+    await checkAdmin(userId, data);
+
+    const normalizedName = requireWikiGroupName(name);
+    if (data.groups[normalizedName]) throw new Error('Group already exists');
+
+    data.groups[normalizedName] = {
+      name: normalizedName,
+      memberIds: []
+    };
+
+    await saveData(data);
+    return data.groups[normalizedName];
+  },
+
+  async updateWikiGroup(name, memberIds, userId) {
+    const data = await loadData();
+    await checkAdmin(userId, data);
+
+    const normalizedName = normalizeGroupName(name);
+    if (!normalizedName) throw new Error('Group name is required');
+    if (!data.groups[normalizedName]) throw new Error('Group not found');
+
+    data.groups[normalizedName] = {
+      name: normalizedName,
+      memberIds: sanitizeMemberIds(memberIds || [], data)
+    };
+
+    await saveData(data);
+    return data.groups[normalizedName];
+  },
+
+  async deleteWikiGroup(name, userId) {
+    const data = await loadData();
+    await checkAdmin(userId, data);
+
+    const normalizedName = normalizeGroupName(name);
+    if (!normalizedName) throw new Error('Group name is required');
+    if (!data.groups[normalizedName]) throw new Error('Group not found');
+    if (!normalizedName.startsWith('wiki_')) {
+      throw new Error('Only wiki_ groups can be deleted here');
+    }
+
+    delete data.groups[normalizedName];
+
+    Object.values(data.sections).forEach(section => {
+      section.readGroups = (section.readGroups || []).filter(groupName => groupName !== normalizedName);
+      section.writeGroups = (section.writeGroups || []).filter(groupName => groupName !== normalizedName);
+      section.approverGroups = (section.approverGroups || []).filter(groupName => groupName !== normalizedName);
+    });
+
+    await saveData(data);
   },
 
   async createWikiSection(title, sectionData, userId) {
@@ -267,7 +436,18 @@ export const wikiDataController = {
     const normalizedTitle = (title || sectionData?.title || '').trim();
     if (!normalizedTitle) throw new Error('Title is required');
     if (data.sections[normalizedTitle]) throw new Error('Section already exists');
-    data.sections[normalizedTitle] = { ...sectionData, title: normalizedTitle };
+
+    data.sections[normalizedTitle] = {
+      title: normalizedTitle,
+      readGroups: dedupe(sectionData?.readGroups || []).map(normalizeGroupName),
+      writeGroups: dedupe(sectionData?.writeGroups || []).map(normalizeGroupName),
+      approverGroups: dedupe(sectionData?.approverGroups || []).map(normalizeGroupName),
+      reviewRequired: Boolean(sectionData?.reviewRequired)
+    };
+
+    [...data.sections[normalizedTitle].readGroups, ...data.sections[normalizedTitle].writeGroups, ...data.sections[normalizedTitle].approverGroups]
+      .forEach(groupName => ensureGroup(data.groups, groupName));
+
     await saveData(data);
     return data.sections[normalizedTitle];
   },
@@ -282,12 +462,20 @@ export const wikiDataController = {
 
     const nextTitle = (sectionData?.title || normalizedTitle).trim();
     if (!nextTitle) throw new Error('Title is required');
-
     if (nextTitle !== normalizedTitle && data.sections[nextTitle]) {
       throw new Error('Section already exists');
     }
 
-    const updatedSection = { ...sectionData, title: nextTitle };
+    const updatedSection = {
+      title: nextTitle,
+      readGroups: dedupe(sectionData?.readGroups || []).map(normalizeGroupName),
+      writeGroups: dedupe(sectionData?.writeGroups || []).map(normalizeGroupName),
+      approverGroups: dedupe(sectionData?.approverGroups || []).map(normalizeGroupName),
+      reviewRequired: Boolean(sectionData?.reviewRequired)
+    };
+
+    [...updatedSection.readGroups, ...updatedSection.writeGroups, ...updatedSection.approverGroups]
+      .forEach(groupName => ensureGroup(data.groups, groupName));
 
     if (nextTitle !== normalizedTitle) {
       delete data.sections[normalizedTitle];
@@ -296,14 +484,15 @@ export const wikiDataController = {
       Object.values(data.pages).forEach(page => {
         if (page.sectionId === normalizedTitle) page.sectionId = nextTitle;
         if (Array.isArray(page.pendingRevisions)) {
-          page.pendingRevisions.forEach(rev => {
-            if (rev.sectionId === normalizedTitle) rev.sectionId = nextTitle;
+          page.pendingRevisions.forEach(revision => {
+            if (revision.sectionId === normalizedTitle) revision.sectionId = nextTitle;
           });
         }
       });
     } else {
       data.sections[normalizedTitle] = updatedSection;
     }
+
     await saveData(data);
     return data.sections[nextTitle];
   },
@@ -315,17 +504,19 @@ export const wikiDataController = {
     const normalizedTitle = (title || '').trim();
     if (!normalizedTitle) throw new Error('Title is required');
     if (!data.sections[normalizedTitle]) throw new Error('Section not found');
+
     delete data.sections[normalizedTitle];
 
     const defaultSectionTitle = getDefaultSectionTitle(data);
     Object.values(data.pages).forEach(page => {
       if (page.sectionId === normalizedTitle) page.sectionId = defaultSectionTitle;
       if (Array.isArray(page.pendingRevisions)) {
-        page.pendingRevisions.forEach(rev => {
-          if (rev.sectionId === normalizedTitle) rev.sectionId = defaultSectionTitle;
+        page.pendingRevisions.forEach(revision => {
+          if (revision.sectionId === normalizedTitle) revision.sectionId = defaultSectionTitle;
         });
       }
     });
+
     await saveData(data);
     return { success: true };
   },
@@ -339,7 +530,7 @@ export const wikiDataController = {
     return Object.values(data.pages)
       .filter(page => {
         const section = data.sections[page.sectionId || defaultSectionTitle];
-        return section && section.readUsers.includes(userId);
+        return section && hasGroupPermission(data, section.readGroups, userId);
       })
       .map(page => {
         const head = page.revisions[0] || {};
@@ -356,9 +547,10 @@ export const wikiDataController = {
     const data = await loadData();
     const page = data.pages[title];
     if (!page) return null;
+
     const defaultSectionTitle = getDefaultSectionTitle(data);
     const section = data.sections[page.sectionId || defaultSectionTitle];
-    if (!section || !userId || !section.readUsers.includes(userId)) {
+    if (!section || !hasGroupPermission(data, section.readGroups, userId)) {
       throw new Error('Permission denied');
     }
 
@@ -372,22 +564,15 @@ export const wikiDataController = {
     const data = await loadData();
     const normalizedTitle = title?.trim();
     if (!normalizedTitle) throw new Error('Title is required');
-    let page = data.pages[normalizedTitle];
 
+    let page = data.pages[normalizedTitle];
     const defaultSectionTitle = getDefaultSectionTitle(data);
     const targetSectionId = sectionId || (page ? page.sectionId : defaultSectionTitle);
     const section = data.sections[targetSectionId];
     if (!section) throw new Error('Invalid section');
-
-    const dbUser = getUserById(data, userId);
-    if (!dbUser) throw new Error('User not found');
-
-    const canWrite = section.writeUsers.includes(userId);
-    if (!canWrite) throw new Error('Permission denied');
-
-    if (!hasWikiPageChanges(page, content, targetSectionId)) {
-      throw new Error('No changes to save');
-    }
+    if (!getUserById(data, userId)) throw new Error('User not found');
+    if (!hasGroupPermission(data, section.writeGroups, userId)) throw new Error('Permission denied');
+    if (!hasWikiPageChanges(page, content, targetSectionId)) throw new Error('No changes to save');
 
     const reviewRequired = section.reviewRequired || page?.reviewRequired;
 
@@ -455,11 +640,9 @@ export const wikiDataController = {
     const pendingRevision = page.pendingRevisions[index];
     const defaultSectionTitle = getDefaultSectionTitle(data);
     const section = data.sections[pendingRevision.sectionId || page.sectionId || defaultSectionTitle];
-
-    if (!section || !section.approverUsers.includes(userId)) {
+    if (!section || !hasGroupPermission(data, section.approverGroups, userId)) {
       throw new Error('Permission denied');
     }
-
     if (userId === pendingRevision.authorId) {
       throw new Error('Cannot approve your own changes');
     }
@@ -476,7 +659,6 @@ export const wikiDataController = {
     page.revisions.unshift(newRevision);
     page.title = pendingRevision.title;
     if (pendingRevision.sectionId) page.sectionId = pendingRevision.sectionId;
-
     page.pendingRevisions.splice(index, 1);
 
     await saveData(data);
@@ -493,8 +675,7 @@ export const wikiDataController = {
     const pendingRevision = page.pendingRevisions[index];
     const defaultSectionTitle = getDefaultSectionTitle(data);
     const section = data.sections[pendingRevision.sectionId || page.sectionId || defaultSectionTitle];
-
-    if (!section || !section.approverUsers.includes(userId)) {
+    if (!section || !hasGroupPermission(data, section.approverGroups, userId)) {
       throw new Error('Permission denied');
     }
 
@@ -514,8 +695,9 @@ export const wikiDataController = {
     const data = await loadData();
     const page = data.pages[title];
     if (!page) return null;
+    if (!isAdminUser(data, userId)) throw new Error('Permission denied');
 
-    const targetRevision = page.revisions.find(revision => revision.version === parseInt(version));
+    const targetRevision = page.revisions.find(revision => revision.version === parseInt(version, 10));
     if (!targetRevision) return null;
 
     return this.saveWikiPage(page.title, targetRevision.content, userId, page.sectionId);

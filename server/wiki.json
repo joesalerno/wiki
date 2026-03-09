@@ -2,51 +2,56 @@
   "users": [
     {
       "id": "u1",
-      "name": "Alice (Admin)",
-      "isAdmin": true
+      "name": "Alice (Admin)"
     },
     {
       "id": "u2",
-      "name": "Bob (Editor)",
-      "isAdmin": false
+      "name": "Bob (Editor)"
     },
     {
       "id": "u3",
-      "name": "Charlie (Viewer)",
-      "isAdmin": false
+      "name": "Charlie (Viewer)"
     }
   ],
-  "sections": {
-    "General": {
-      "title": "General",
-      "readUsers": [
-        "u1",
-        "u2",
-        "u3"
-      ],
-      "writeUsers": [
-        "u1",
-        "u2"
-      ],
-      "reviewRequired": false,
-      "approverUsers": [
+  "groups": {
+    "admin": {
+      "name": "admin",
+      "memberIds": [
         "u1"
       ]
     },
+    "wiki_editors": {
+      "name": "wiki_editors",
+      "memberIds": [
+        "u1",
+        "u2"
+      ]
+    }
+  },
+  "sections": {
+    "General": {
+      "title": "General",
+      "readGroups": [],
+      "writeGroups": [
+        "wiki_editors"
+      ],
+      "approverGroups": [
+        "admin"
+      ],
+      "reviewRequired": false
+    },
     "Restricted Area": {
       "title": "Restricted Area",
-      "readUsers": [
-        "u1",
-        "u2"
+      "readGroups": [
+        "wiki_editors"
       ],
-      "writeUsers": [
-        "u1",
-        "u2"
+      "writeGroups": [
+        "wiki_editors"
       ],
-      "reviewRequired": true,
-      "approverUsers": [
-        "u1"
-      ]
+      "approverGroups": [
+        "admin"
+      ],
+      "reviewRequired": true
     }
   },
   "pages": {
@@ -58,7 +63,7 @@
           "version": 1,
           "content": "# About This Wiki\n\nThis wiki is a lightweight knowledge base for shared notes, team docs, and internal reference pages.\n\n## Features\n\n- Browse pages by section and filter them with search\n- Write in Markdown with a built-in preview\n- Upload images and files directly into pages\n- Review revision history and compare older changes\n- Revert to an earlier version when needed\n- Control access with section-based read and write permissions\n- Route updates through approval when a section requires review\n\n## How to use it\n\n1. Open a page from the sidebar or create a new one.\n2. Edit in Markdown, then switch to Preview before saving.\n3. Use History to inspect changes or restore an older revision.\n4. In sections that require review, approvers can accept or reject pending edits.",
           "authorId": "u1",
-          "timestamp": 1767042017125
+          "timestamp": 1773042113644
         }
       ]
     },
@@ -70,7 +75,7 @@
           "version": 1,
           "content": "Shhh",
           "authorId": "u1",
-          "timestamp": 1767042017135
+          "timestamp": 1773042113654
         }
       ]
     },
@@ -83,7 +88,7 @@
           "content": "This is top secret.",
           "title": "Top Secret",
           "authorId": "u2",
-          "timestamp": 1767042079073,
+          "timestamp": 1773042175592,
           "sectionId": "Restricted Area"
         }
       ]

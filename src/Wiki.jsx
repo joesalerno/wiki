@@ -3,6 +3,49 @@ import { wikiApi } from './wikiApi';
 import { renderMarkdown } from './wikiMarkdown';
 import './Wiki.css';
 
+const ADMIN_GROUPS = new Set(['admin', 'wiki_admin']);
+
+function getUserGroups(groups, userId) {
+  return Object.values(groups || {})
+    .filter(group => (group.memberIds || []).includes(userId))
+    .map(group => group.name);
+}
+
+function normalizeGroups(groups) {
+  return Object.fromEntries(
+    (groups || []).map(group => {
+      const memberIds = (group.users || []).map(user => user.id);
+      return [group.name, { ...group, memberIds }];
+    })
+  );
+}
+
+function hasGroupAccess(groupNames, user) {
+  if (!groupNames || groupNames.length === 0) return true;
+  if (!user) return false;
+  const userGroups = new Set(user.groups || []);
+  return (groupNames || []).some(groupName => userGroups.has(groupName));
+}
+
+function buildUsersWithGroups(users, groups) {
+  return users.map(user => {
+    const memberships = getUserGroups(groups, user.id);
+    return {
+      ...user,
+      groups: memberships,
+      isAdmin: memberships.some(groupName => ADMIN_GROUPS.has(groupName))
+    };
+  });
+}
+
+function formatList(items) {
+  return items && items.length > 0 ? items.join(', ') : 'None';
+}
+
+function formatReadGroups(items) {
+  return items && items.length > 0 ? items.join(', ') : 'Anyone';
+}
+
 // --- Sub-components ---
 
 function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onApprove, onReject, isApprover, currentUser }) {
@@ -483,80 +526,209 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
   );
 }
 
-function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
-  const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({});
+function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser }) {
+  const [editingSectionId, setEditingSectionId] = useState(null);
+  const [sectionFormData, setSectionFormData] = useState({});
+  const [editingGroupName, setEditingGroupName] = useState(null);
+  const [groupFormName, setGroupFormName] = useState('wiki_');
+  const [groupMemberIds, setGroupMemberIds] = useState([]);
+  const [groupFilter, setGroupFilter] = useState('');
+  const [userFilter, setUserFilter] = useState('');
+  const [permissionGroupFilter, setPermissionGroupFilter] = useState('');
   const canManageSections = Boolean(currentUser?.isAdmin);
+  const groupOptions = Object.values(groups).sort((left, right) => left.name.localeCompare(right.name));
+  const filteredGroupOptions = groupOptions.filter(group => group.name.toLowerCase().includes(groupFilter.toLowerCase()));
+  const filteredUsers = users.filter(user => user.name.toLowerCase().includes(userFilter.toLowerCase()));
+  const filteredPermissionGroups = groupOptions.filter(group => group.name.toLowerCase().includes(permissionGroupFilter.toLowerCase()));
+  const groupUserNames = Object.fromEntries(
+    groupOptions.map(group => [
+      group.name,
+      (group.memberIds || [])
+        .map(memberId => users.find(user => user.id === memberId)?.name || memberId)
+        .join(', ')
+    ])
+  );
 
-    const startEdit = (title, data) => {
-        if (!canManageSections) return;
-        setEditingId(title);
-        if (title === 'new') {
-          setFormData({ title: '', readUsers: [], writeUsers: [], approverUsers: [], reviewRequired: false });
-          return;
-        }
-        setFormData({
-          ...data,
-          readUsers: data?.readUsers || [],
-          writeUsers: data?.writeUsers || [],
-          approverUsers: data?.approverUsers || [],
-          reviewRequired: Boolean(data?.reviewRequired)
-        });
-    };
+  const startEditSection = (title, data) => {
+    if (!canManageSections) return;
 
-  const handleSave = async () => {
+    setEditingSectionId(title);
+    if (title === 'new') {
+      setSectionFormData({ title: '', readGroups: [], writeGroups: [], approverGroups: [], reviewRequired: false });
+      return;
+    }
+
+    setSectionFormData({
+      ...data,
+      readGroups: data?.readGroups || [],
+      writeGroups: data?.writeGroups || [],
+      approverGroups: data?.approverGroups || [],
+      reviewRequired: Boolean(data?.reviewRequired)
+    });
+  };
+
+  const startEditGroup = (name, data) => {
+    if (!canManageSections) return;
+
+    setEditingGroupName(name);
+    if (name === 'new') {
+      setGroupFormName('wiki_');
+      setGroupMemberIds([]);
+      return;
+    }
+
+    setGroupFormName(data?.name || name);
+    setGroupMemberIds(data?.memberIds || []);
+  };
+
+  const handleSaveSection = async () => {
     try {
-      if (editingId === 'new') {
-        await wikiApi.createWikiSection(formData);
+      if (editingSectionId === 'new') {
+        await wikiApi.createWikiSection(sectionFormData);
       } else {
-        await wikiApi.updateWikiSection(editingId, formData);
+        await wikiApi.updateWikiSection(editingSectionId, sectionFormData);
       }
+
       onUpdate();
-      setEditingId(null);
-    } catch (e) {
-      alert(e.message);
+      setEditingSectionId(null);
+    } catch (error) {
+      alert(error.message);
     }
   };
 
-  const handleDelete = async (title) => {
-    if (!window.confirm("Are you sure?")) return;
+  const handleDeleteSection = async (title) => {
+    if (!window.confirm('Are you sure?')) return;
+
     try {
       await wikiApi.deleteWikiSection(title);
       onUpdate();
-    } catch (e) {
-      alert(e.message);
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  const handleSaveGroup = async () => {
+    try {
+      const normalizedName = groupFormName.trim();
+      if (editingGroupName === 'new') {
+        await wikiApi.createWikiGroup(normalizedName);
+      }
+      await wikiApi.updateWikiGroup(normalizedName, groupMemberIds);
+      onUpdate();
+      setEditingGroupName(null);
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  const handleDeleteGroup = async (name) => {
+    if (!window.confirm(`Delete ${name}?`)) return;
+
+    try {
+      await wikiApi.deleteWikiGroup(name);
+      onUpdate();
+    } catch (error) {
+      alert(error.message);
     }
   };
 
   const renderSectionForm = () => (
     <div className="admin-form">
-       <input type="text" placeholder="Title" value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} />
+      <input
+        type="text"
+        placeholder="Title"
+        value={sectionFormData.title || ''}
+        onChange={e => setSectionFormData({ ...sectionFormData, title: e.target.value })}
+      />
 
-       <label>Read Users:</label>
-       <select multiple style={{width: '100%', height: '80px'}} value={formData.readUsers || []} onChange={e => setFormData({...formData, readUsers: Array.from(e.target.selectedOptions, o => o.value)})}>
-         {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-       </select>
+      <label>Read Groups:</label>
+      <div style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0.25rem 0 0.5rem' }}>
+        Leave empty to allow anyone to read the section.
+      </div>
+      <input
+        type="text"
+        placeholder="Filter groups"
+        value={permissionGroupFilter}
+        onChange={e => setPermissionGroupFilter(e.target.value)}
+        style={{ marginBottom: '0.5rem' }}
+      />
+      <select
+        multiple
+        style={{ width: '100%', height: '100px' }}
+        value={sectionFormData.readGroups || []}
+        onChange={e => setSectionFormData({ ...sectionFormData, readGroups: Array.from(e.target.selectedOptions, option => option.value) })}
+      >
+        {filteredPermissionGroups.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}
+      </select>
 
-       <label>Write Users:</label>
-       <select multiple style={{width: '100%', height: '80px'}} value={formData.writeUsers || []} onChange={e => setFormData({...formData, writeUsers: Array.from(e.target.selectedOptions, o => o.value)})}>
-         {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-       </select>
+      <label>Write Groups:</label>
+      <select
+        multiple
+        style={{ width: '100%', height: '100px' }}
+        value={sectionFormData.writeGroups || []}
+        onChange={e => setSectionFormData({ ...sectionFormData, writeGroups: Array.from(e.target.selectedOptions, option => option.value) })}
+      >
+        {filteredPermissionGroups.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}
+      </select>
 
-       <div style={{margin: '0.5rem 0'}}>
+      <div style={{ margin: '0.5rem 0' }}>
         <label>
-          <input type="checkbox" checked={formData.reviewRequired || false} onChange={e => setFormData({...formData, reviewRequired: e.target.checked})} />
+          <input
+            type="checkbox"
+            checked={sectionFormData.reviewRequired || false}
+            onChange={e => setSectionFormData({ ...sectionFormData, reviewRequired: e.target.checked })}
+          />
           Review Required
         </label>
-       </div>
+      </div>
 
-       <label>Approver Users:</label>
-       <select multiple style={{width: '100%', height: '80px'}} value={formData.approverUsers || []} onChange={e => setFormData({...formData, approverUsers: Array.from(e.target.selectedOptions, o => o.value)})}>
-         {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-       </select>
+      <label>Approver Groups:</label>
+      <select
+        multiple
+        style={{ width: '100%', height: '100px' }}
+        value={sectionFormData.approverGroups || []}
+        onChange={e => setSectionFormData({ ...sectionFormData, approverGroups: Array.from(e.target.selectedOptions, option => option.value) })}
+      >
+        {filteredPermissionGroups.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}
+      </select>
 
-       <div className="admin-actions" style={{marginTop: '1rem'}}>
-        <button className="btn btn-sm btn-primary" onClick={handleSave}>Save</button>
-        <button className="btn btn-sm btn-secondary" onClick={() => setEditingId(null)}>Cancel</button>
+      <div className="admin-actions" style={{ marginTop: '1rem' }}>
+        <button className="btn btn-sm btn-primary" onClick={handleSaveSection}>Save</button>
+        <button className="btn btn-sm btn-secondary" onClick={() => setEditingSectionId(null)}>Cancel</button>
+      </div>
+    </div>
+  );
+
+  const renderGroupForm = () => (
+    <div className="admin-form" style={{ marginBottom: '1.5rem' }}>
+      <input
+        type="text"
+        placeholder="wiki_group_name"
+        value={groupFormName}
+        disabled={editingGroupName !== 'new'}
+        onChange={e => setGroupFormName(e.target.value)}
+      />
+
+      <label>Members:</label>
+      <input
+        type="text"
+        placeholder="Filter users"
+        value={userFilter}
+        onChange={e => setUserFilter(e.target.value)}
+        style={{ marginBottom: '0.5rem' }}
+      />
+      <select
+        multiple
+        style={{ width: '100%', height: '100px' }}
+        value={groupMemberIds}
+        onChange={e => setGroupMemberIds(Array.from(e.target.selectedOptions, option => option.value))}
+      >
+        {filteredUsers.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+      </select>
+
+      <div className="admin-actions" style={{ marginTop: '1rem' }}>
+        <button className="btn btn-sm btn-primary" onClick={handleSaveGroup}>Save</button>
+        <button className="btn btn-sm btn-secondary" onClick={() => setEditingGroupName(null)}>Cancel</button>
       </div>
     </div>
   );
@@ -571,19 +743,77 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
 
         {!canManageSections && (
           <div className="wiki-inline-notice">
-            Only admins can create, edit, or delete sections.
+            Only admin or wiki_admin members can manage groups and sections.
           </div>
         )}
 
-        {!editingId && (
+        <div style={{ marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 style={{ margin: 0, fontSize: '1rem' }}>Group Management</h2>
+            {!editingGroupName && (
+              <button className="btn btn-sm btn-primary" onClick={() => startEditGroup('new', {})} disabled={!canManageSections}>
+                + Create Wiki Group
+              </button>
+            )}
+          </div>
+
+          <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '1rem' }}>
+            Create wiki-specific groups with a wiki_ prefix and manage their memberships here. Section permissions can use any group returned by the backend.
+          </div>
+
+          {!editingGroupName && (
+            <input
+              type="text"
+              placeholder="Filter groups"
+              value={groupFilter}
+              onChange={e => setGroupFilter(e.target.value)}
+              style={{ marginBottom: '1rem', maxWidth: '320px' }}
+            />
+          )}
+
+          {editingGroupName ? renderGroupForm() : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
+                  <th style={{ padding: '0.5rem' }}>Group</th>
+                  <th style={{ padding: '0.5rem' }}>Members</th>
+                  <th style={{ padding: '0.5rem' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredGroupOptions.map(group => (
+                  <tr key={group.name} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    <td style={{ padding: '0.5rem' }}>{group.name}</td>
+                    <td style={{ padding: '0.5rem' }}>{groupUserNames[group.name] || 'No members'}</td>
+                    <td style={{ padding: '0.5rem' }}>
+                      <button className="btn-text" onClick={() => startEditGroup(group.name, group)} disabled={!canManageSections}>Edit Members</button>
+                      {group.name.startsWith('wiki_') && (
+                        <button
+                          className="btn-text"
+                          style={{ color: '#9ca3af', marginLeft: '0.5rem', cursor: canManageSections ? 'pointer' : 'not-allowed' }}
+                          onClick={() => canManageSections && handleDeleteGroup(group.name)}
+                          disabled={!canManageSections}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {!editingSectionId && (
            <div style={{marginBottom: '1rem'}}>
-            <button className="btn btn-sm btn-primary" onClick={() => startEdit('new', {})} disabled={!canManageSections}>
+            <button className="btn btn-sm btn-primary" onClick={() => startEditSection('new', {})} disabled={!canManageSections}>
               + Create New Section
             </button>
            </div>
         )}
 
-        {editingId ? (
+        {editingSectionId ? (
           <div style={{maxWidth: '500px'}}>
             {renderSectionForm()}
           </div>
@@ -603,17 +833,17 @@ function AdminPanel({ users, sections, onUpdate, onClose, currentUser }) {
                   <td style={{padding: '0.5rem'}}>
                     <div><strong>{s.title}</strong></div>
                     <div style={{fontSize: '0.8rem'}}>
-                      <span style={{color: '#059669'}}>R: {s.readUsers.join(', ')}</span> |
-                      <span style={{color: '#d97706'}}> W: {s.writeUsers.join(', ')}</span>
+                      <span style={{color: '#059669'}}>R: {formatReadGroups(s.readGroups)}</span> |
+                      <span style={{color: '#d97706'}}> W: {formatList(s.writeGroups)}</span>
                     </div>
-                    {s.reviewRequired && <div style={{fontSize: '0.75rem', color: '#dc2626'}}>Review Required (Approvers: {s.approverUsers.join(', ')})</div>}
+                    {s.reviewRequired && <div style={{fontSize: '0.75rem', color: '#dc2626'}}>Review Required (Approvers: {formatList(s.approverGroups)})</div>}
                   </td>
                   <td style={{padding: '0.5rem'}}>
-                    <button className="btn-text" onClick={() => startEdit(s.title, s)} disabled={!canManageSections}>Edit</button>
+                    <button className="btn-text" onClick={() => startEditSection(s.title, s)} disabled={!canManageSections}>Edit</button>
                     <button
                       className="btn-text"
                       style={{color: '#9ca3af', marginLeft: '0.5rem', cursor: canManageSections ? 'pointer' : 'not-allowed'}}
-                      onClick={() => canManageSections && handleDelete(s.title)}
+                      onClick={() => canManageSections && handleDeleteSection(s.title)}
                       disabled={!canManageSections}
                       title={canManageSections ? 'Delete Section' : "You don't have permission to delete sections"}
                     >
@@ -645,7 +875,7 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
   // Group pages by section
   const pagesBySection = {};
     Object.values(sections).forEach(section => {
-      const canRead = currentUser ? section.readUsers.includes(currentUser.id) : false;
+      const canRead = hasGroupAccess(section.readGroups, currentUser);
       if (canRead) {
         pagesBySection[section.title] = {
           title: section.title,
@@ -682,6 +912,9 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
         </select>
         <div style={{marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
           <span>Role: {currentUser?.isAdmin ? 'Admin' : 'Member'}</span>
+        </div>
+        <div style={{marginTop: '0.25rem', fontSize: '0.75rem', color: '#9ca3af'}}>
+          Groups: {formatList(currentUser?.groups || [])}
         </div>
       </div>
 
@@ -759,6 +992,7 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
 export default function Wiki() {
   // State
   const [users, setUsers] = useState([]);
+  const [groups, setGroups] = useState({});
   const [currentUser, setCurrentUser] = useState(null);
   const [pages, setPages] = useState([]);
   const [sections, setSections] = useState({});
@@ -774,33 +1008,38 @@ export default function Wiki() {
     const initData = async () => {
       try {
         setLoading(true);
-        const [loadedUsers, loadedPages, loadedSections] = await Promise.all([
+        const [loadedUsers, loadedGroups, loadedPages, loadedSections] = await Promise.all([
           wikiApi.getWikiUsers(),
+          wikiApi.getWikiGroups(),
           wikiApi.getWikiPages(),
           wikiApi.getWikiSections()
         ]);
-        setUsers(loadedUsers);
+
+        const groupMap = normalizeGroups(loadedGroups);
+        const usersWithGroups = buildUsersWithGroups(loadedUsers, groupMap);
         const sectionMap = loadedSections.reduce((acc, section) => {
           acc[section.title] = section;
           return acc;
         }, {});
 
-        let initialUser = currentUser;
+        let initialUser = currentUser ? usersWithGroups.find(user => user.id === currentUser.id) : null;
         if (!initialUser) {
             const storedId = localStorage.getItem('wiki_user_id');
-            if (storedId) initialUser = loadedUsers.find(u => u.id === storedId);
+            if (storedId) initialUser = usersWithGroups.find(u => u.id === storedId);
         }
-        if (!initialUser) initialUser = loadedUsers[0] || null;
+        if (!initialUser) initialUser = usersWithGroups[0] || null;
 
-        if (initialUser && (!currentUser || currentUser.id !== initialUser.id)) {
-            setCurrentUser(initialUser);
-            localStorage.setItem('wiki_user_id', initialUser.id);
+        if (initialUser) {
+          setCurrentUser(initialUser);
+          localStorage.setItem('wiki_user_id', initialUser.id);
         }
 
         const nextPageTitle = loadedPages.some(page => page.title === currentPageTitle)
           ? currentPageTitle
           : (loadedPages[0]?.title || null);
 
+        setUsers(usersWithGroups);
+        setGroups(groupMap);
         setPages(loadedPages);
         setSections(sectionMap);
         setCurrentPageTitle(nextPageTitle);
@@ -866,11 +1105,11 @@ export default function Wiki() {
   // Logic: Check section permissions for current page.
     const currentSection = currentPageData ? sections[currentPageData.sectionId] : null;
     const canEdit = currentUser && currentSection
-      ? currentSection.writeUsers.includes(currentUser.id)
+      ? hasGroupAccess(currentSection.writeGroups, currentUser)
       : false;
 
     const canDelete = currentUser && currentUser.isAdmin;
-    const writableSections = Object.values(sections).filter(section => currentUser && section.writeUsers.includes(currentUser.id));
+    const writableSections = Object.values(sections).filter(section => hasGroupAccess(section.writeGroups, currentUser));
     const canCreatePage = writableSections.length > 0;
     const canManageSections = Boolean(currentUser?.isAdmin);
 
@@ -903,6 +1142,7 @@ export default function Wiki() {
         {viewMode === 'admin' && (
             <AdminPanel
                 users={users}
+              groups={groups}
                 sections={sections}
                 onUpdate={() => setTick(t => t + 1)}
             onClose={() => setViewMode('read')}
@@ -919,8 +1159,8 @@ export default function Wiki() {
             pendingRevisions={currentPageData.pendingRevisions}
             isApprover={Boolean(
               currentUser && (
-                sections[currentPageData.sectionId]?.approverUsers.includes(currentUser.id)
-                || currentPageData.pendingRevisions?.some(revision => sections[revision.sectionId]?.approverUsers.includes(currentUser.id))
+                hasGroupAccess(sections[currentPageData.sectionId]?.approverGroups, currentUser)
+                || currentPageData.pendingRevisions?.some(revision => hasGroupAccess(sections[revision.sectionId]?.approverGroups, currentUser))
               )
             )}
             currentUser={currentUser}

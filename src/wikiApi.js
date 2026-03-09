@@ -32,10 +32,25 @@ export const wikiApi = {
   async getWikiUsers() {
     const data = await gqlRequest(
       `query GetWikiUsers {
-        wikiUsers { id name isAdmin }
+        wikiUsers { id name }
       }`
     );
     return data.wikiUsers;
+  },
+
+  async getWikiGroups() {
+    const data = await gqlRequest(
+      `query GetGroups {
+        groups {
+          name
+          users {
+            id
+            name
+          }
+        }
+      }`
+    );
+    return data.groups;
   },
 
   async getWikiSections() {
@@ -43,9 +58,9 @@ export const wikiApi = {
       `query GetWikiSections {
         wikiSections {
           title
-          readUsers
-          writeUsers
-          approverUsers
+          readGroups
+          writeGroups
+          approverGroups
           reviewRequired
         }
       }`
@@ -59,9 +74,9 @@ export const wikiApi = {
       `mutation CreateWikiSection($input: WikiSectionInput!, $userId: ID) {
         createWikiSection(input: $input, userId: $userId) {
           title
-          readUsers
-          writeUsers
-          approverUsers
+          readGroups
+          writeGroups
+          approverGroups
           reviewRequired
         }
       }`,
@@ -76,15 +91,60 @@ export const wikiApi = {
       `mutation UpdateWikiSection($title: String!, $input: WikiSectionInput!, $userId: ID) {
         updateWikiSection(title: $title, input: $input, userId: $userId) {
           title
-          readUsers
-          writeUsers
-          approverUsers
+          readGroups
+          writeGroups
+          approverGroups
           reviewRequired
         }
       }`,
       { title, input: sectionInput, userId }
     );
     return result.updateWikiSection;
+  },
+
+  async createWikiGroup(name) {
+    const userId = getCurrentWikiUserId();
+    const result = await gqlRequest(
+      `mutation CreateWikiGroup($name: String!, $userId: ID) {
+        createWikiGroup(name: $name, userId: $userId) {
+          name
+          users {
+            id
+            name
+          }
+        }
+      }`,
+      { name, userId }
+    );
+    return result.createWikiGroup;
+  },
+
+  async updateWikiGroup(name, memberIds) {
+    const userId = getCurrentWikiUserId();
+    const result = await gqlRequest(
+      `mutation UpdateWikiGroup($name: String!, $memberIds: [ID!]!, $userId: ID) {
+        updateWikiGroup(name: $name, memberIds: $memberIds, userId: $userId) {
+          name
+          users {
+            id
+            name
+          }
+        }
+      }`,
+      { name, memberIds, userId }
+    );
+    return result.updateWikiGroup;
+  },
+
+  async deleteWikiGroup(name) {
+    const userId = getCurrentWikiUserId();
+    const result = await gqlRequest(
+      `mutation DeleteWikiGroup($name: String!, $userId: ID) {
+        deleteWikiGroup(name: $name, userId: $userId)
+      }`,
+      { name, userId }
+    );
+    return result.deleteWikiGroup;
   },
 
   async deleteWikiSection(title) {
