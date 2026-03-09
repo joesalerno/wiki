@@ -4,6 +4,30 @@ import { renderMarkdown } from './wikiMarkdown';
 import './Wiki.css';
 
 const ADMIN_GROUPS = new Set(['admin', 'wiki_admin']);
+const ADMIN_PERMISSION_GROUP = 'wiki_admin';
+
+function dedupeItems(values) {
+  return [...new Set((values || []).filter(Boolean))];
+}
+
+function withRequiredAdminPermission(groups) {
+  return dedupeItems([
+    ADMIN_PERMISSION_GROUP,
+    ...(groups || []).map(groupName => ADMIN_GROUPS.has(groupName) ? ADMIN_PERMISSION_GROUP : groupName)
+  ]);
+}
+
+function getAdminPermissionMemberNames(groups, users) {
+  const memberIds = new Set(
+    Object.values(groups || {})
+      .filter(group => ADMIN_GROUPS.has(group.name))
+      .flatMap(group => group.memberIds || [])
+  );
+
+  return users
+    .filter(user => memberIds.has(user.id))
+    .map(user => user.name);
+}
 
 function getUserGroups(groups, userId) {
   return Object.values(groups || {})
@@ -97,11 +121,12 @@ function FilterableChecklist({
         ) : options.map(option => {
           const checked = selectedValues.includes(option.value);
           return (
-            <label key={option.value} className={`wiki-picker-item ${checked ? 'selected' : ''}`}>
+            <label key={option.value} className={`wiki-picker-item ${checked ? 'selected' : ''} ${option.disabled ? 'disabled' : ''}`}>
               <input
                 type="checkbox"
                 checked={checked}
-                onChange={() => onToggle(option.value)}
+                disabled={option.disabled}
+                onChange={() => !option.disabled && onToggle(option.value)}
               />
               <div className="wiki-picker-item-body">
                 <div className="wiki-picker-item-title">{option.label}</div>
@@ -598,21 +623,26 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
 }
 
 function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser }) {
-  const [activeTab, setActiveTab] = useState('groups');
+  const [activeTab, setActiveTab] = useState('sections');
   const [editingSectionId, setEditingSectionId] = useState(null);
   const [sectionFormData, setSectionFormData] = useState({});
   const [editingGroupName, setEditingGroupName] = useState(null);
   const [groupFormName, setGroupFormName] = useState('wiki_');
   const [groupMemberIds, setGroupMemberIds] = useState([]);
   const [groupFilter, setGroupFilter] = useState('');
+  const [sectionFilter, setSectionFilter] = useState('');
   const [userFilter, setUserFilter] = useState('');
   const [permissionGroupFilter, setPermissionGroupFilter] = useState('');
   const canManageSections = Boolean(currentUser?.isAdmin);
   const groupOptions = Object.values(groups).sort((left, right) => left.name.localeCompare(right.name));
   const editableGroupOptions = groupOptions.filter(group => group.name.startsWith('wiki_'));
   const filteredGroupOptions = editableGroupOptions.filter(group => group.name.toLowerCase().includes(groupFilter.toLowerCase()));
+  const filteredSections = Object.values(sections)
+    .sort((left, right) => left.title.localeCompare(right.title))
+    .filter(section => section.title.toLowerCase().includes(sectionFilter.toLowerCase()));
   const filteredUsers = users.filter(user => user.name.toLowerCase().includes(userFilter.toLowerCase()));
   const filteredPermissionGroups = groupOptions.filter(group => group.name.toLowerCase().includes(permissionGroupFilter.toLowerCase()));
+  const adminPermissionMembers = getAdminPermissionMemberNames(groups, users);
   const groupUserNames = Object.fromEntries(
     groupOptions.map(group => [
       group.name,
@@ -637,6 +667,16 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
     description: groupUserNames[group.name] || 'No members'
   }));
 
+  const permissionChecklistOptions = [
+    {
+      value: ADMIN_PERMISSION_GROUP,
+      label: ADMIN_PERMISSION_GROUP,
+      description: adminPermissionMembers.length > 0 ? adminPermissionMembers.join(', ') : 'No members',
+      disabled: true
+    },
+    ...groupChecklistOptions.filter(option => !ADMIN_GROUPS.has(option.value))
+  ];
+
   const userChecklistOptions = filteredUsers.map(user => ({
     value: user.id,
     label: user.name,
@@ -651,7 +691,13 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
     setUserFilter('');
     setEditingSectionId(title);
     if (title === 'new') {
-      setSectionFormData({ title: '', readGroups: [], writeGroups: [], approverGroups: [], reviewRequired: false });
+      setSectionFormData({
+        title: '',
+        readGroups: withRequiredAdminPermission([]),
+        writeGroups: withRequiredAdminPermission([]),
+        approverGroups: [],
+        reviewRequired: false
+      });
       setPermissionGroupFilter('');
       return;
     }
@@ -659,9 +705,9 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
     setPermissionGroupFilter('');
     setSectionFormData({
       ...data,
-      readGroups: data?.readGroups || [],
-      writeGroups: data?.writeGroups || [],
-      approverGroups: data?.approverGroups || [],
+      readGroups: withRequiredAdminPermission(data?.readGroups || []),
+      writeGroups: withRequiredAdminPermission(data?.writeGroups || []),
+      approverGroups: data?.reviewRequired ? withRequiredAdminPermission(data?.approverGroups || []) : [],
       reviewRequired: Boolean(data?.reviewRequired)
     });
   };
@@ -735,6 +781,11 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
   };
 
   const handleDeleteGroup = async (name) => {
+    if (name === ADMIN_PERMISSION_GROUP) {
+      alert('wiki_admin cannot be deleted.');
+      return;
+    }
+
     if (!window.confirm(`Delete ${name}?`)) return;
 
     try {
@@ -750,7 +801,7 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
       <div className="wiki-admin-editor-header">
         <div>
           <h2 className="wiki-admin-editor-title">{editingSectionId === 'new' ? 'New Section' : `Editing ${editingSectionId}`}</h2>
-          <div className="wiki-admin-editor-subtitle">Configure section access by group. Leave read access empty to make the section public.</div>
+          <div className="wiki-admin-editor-subtitle">Configure section access by group. Leave empty to allow anyone with access to perform the action.</div>
         </div>
       </div>
 
@@ -769,63 +820,10 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
         <input
           type="text"
           className="wiki-search-input wiki-picker-filter"
-          placeholder="Search groups once and use the lists below"
+          placeholder="Search groups by name"
           value={permissionGroupFilter}
           onChange={e => setPermissionGroupFilter(e.target.value)}
         />
-      </div>
-
-      <div className="wiki-admin-picker-grid">
-        <div className="wiki-admin-field">
-          <label className="wiki-admin-label">Read Groups</label>
-          <div className="wiki-admin-help">Leave empty to allow anyone to read the section.</div>
-          <FilterableChecklist
-            options={groupChecklistOptions}
-            selectedValues={sectionFormData.readGroups || []}
-            onToggle={(value) => setSectionFormData({
-              ...sectionFormData,
-              readGroups: toggleSelectedValue(sectionFormData.readGroups || [], value)
-            })}
-            emptyResultsLabel="No groups match this filter."
-            selectedSummaryLabel="Selected read groups"
-            emptySelectionLabel="Anyone can read this section"
-            height={150}
-          />
-        </div>
-
-        <div className="wiki-admin-field">
-          <label className="wiki-admin-label">Write Groups</label>
-          <div className="wiki-admin-help">Leave empty to allow anyone to write in the section.</div>
-          <FilterableChecklist
-            options={groupChecklistOptions}
-            selectedValues={sectionFormData.writeGroups || []}
-            onToggle={(value) => setSectionFormData({
-              ...sectionFormData,
-              writeGroups: toggleSelectedValue(sectionFormData.writeGroups || [], value)
-            })}
-            emptyResultsLabel="No groups match this filter."
-            selectedSummaryLabel="Selected write groups"
-            emptySelectionLabel="Anyone can write in this section"
-            height={150}
-          />
-        </div>
-
-        <div className="wiki-admin-field wiki-admin-field-full">
-          <label className="wiki-admin-label">Approver Groups</label>
-          <div className="wiki-admin-help">Leave empty to allow anyone with access to approve revisions in the section.</div>
-          <FilterableChecklist
-            options={groupChecklistOptions}
-            selectedValues={sectionFormData.approverGroups || []}
-            onToggle={(value) => setSectionFormData({
-              ...sectionFormData,
-              approverGroups: toggleSelectedValue(sectionFormData.approverGroups || [], value)
-            })}
-            emptyResultsLabel="No groups match this filter."
-            selectedSummaryLabel="Selected approver groups"
-            emptySelectionLabel="Anyone can approve revisions in this section"
-            height={150}
-          />
-        </div>
       </div>
 
       <div className="wiki-admin-field" style={{ marginTop: '0.25rem' }}>
@@ -833,10 +831,66 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
           <input
             type="checkbox"
             checked={sectionFormData.reviewRequired || false}
-            onChange={e => setSectionFormData({ ...sectionFormData, reviewRequired: e.target.checked })}
+            onChange={e => setSectionFormData({
+              ...sectionFormData,
+              reviewRequired: e.target.checked,
+              approverGroups: e.target.checked ? withRequiredAdminPermission(sectionFormData.approverGroups || []) : []
+            })}
           />
           Review Required
         </label>
+      </div>
+
+      <div className="wiki-admin-picker-grid">
+        <div className="wiki-admin-field">
+          <label className="wiki-admin-label">Read Groups</label>
+          <FilterableChecklist
+            options={permissionChecklistOptions}
+            selectedValues={withRequiredAdminPermission(sectionFormData.readGroups || [])}
+            onToggle={(value) => setSectionFormData({
+              ...sectionFormData,
+              readGroups: withRequiredAdminPermission(toggleSelectedValue(sectionFormData.readGroups || [], value))
+            })}
+            emptyResultsLabel="No groups match this filter."
+            selectedSummaryLabel="Selected read groups"
+            emptySelectionLabel="wiki_admin is always included"
+            height={150}
+          />
+        </div>
+
+        <div className="wiki-admin-field">
+          <label className="wiki-admin-label">Write Groups</label>
+          <FilterableChecklist
+            options={permissionChecklistOptions}
+            selectedValues={withRequiredAdminPermission(sectionFormData.writeGroups || [])}
+            onToggle={(value) => setSectionFormData({
+              ...sectionFormData,
+              writeGroups: withRequiredAdminPermission(toggleSelectedValue(sectionFormData.writeGroups || [], value))
+            })}
+            emptyResultsLabel="No groups match this filter."
+            selectedSummaryLabel="Selected write groups"
+            emptySelectionLabel="wiki_admin is always included"
+            height={150}
+          />
+        </div>
+
+        {sectionFormData.reviewRequired && (
+          <div className="wiki-admin-field">
+            <label className="wiki-admin-label">Approver Groups</label>
+            <FilterableChecklist
+              options={permissionChecklistOptions}
+              selectedValues={withRequiredAdminPermission(sectionFormData.approverGroups || [])}
+              onToggle={(value) => setSectionFormData({
+                ...sectionFormData,
+                approverGroups: withRequiredAdminPermission(toggleSelectedValue(sectionFormData.approverGroups || [], value))
+              })}
+              emptyResultsLabel="No groups match this filter."
+              selectedSummaryLabel="Selected approver groups"
+              emptySelectionLabel="wiki_admin is always included"
+              height={150}
+            />
+          </div>
+        )}
       </div>
 
       <div className="admin-actions" style={{ marginTop: '1rem' }}>
@@ -932,22 +986,22 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
           <button
             type="button"
             role="tab"
-            aria-selected={activeTab === 'groups'}
-            className={`wiki-admin-tab ${activeTab === 'groups' ? 'active' : ''}`}
-            onClick={() => !isEditing && setActiveTab('groups')}
-            disabled={isEditing && !isEditingGroup}
-          >
-            Groups
-          </button>
-          <button
-            type="button"
-            role="tab"
             aria-selected={activeTab === 'sections'}
             className={`wiki-admin-tab ${activeTab === 'sections' ? 'active' : ''}`}
             onClick={() => !isEditing && setActiveTab('sections')}
             disabled={isEditing && !isEditingSection}
           >
             Sections
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'groups'}
+            className={`wiki-admin-tab ${activeTab === 'groups' ? 'active' : ''}`}
+            onClick={() => !isEditing && setActiveTab('groups')}
+            disabled={isEditing && !isEditingGroup}
+          >
+            Groups
           </button>
         </div>
 
@@ -957,14 +1011,12 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
         {!isEditing && activeTab === 'groups' && (
         <div style={{ marginBottom: '2rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2 style={{ margin: 0, fontSize: '1rem' }}>Group Management</h2>
             <button className="btn btn-sm btn-primary" onClick={() => startEditGroup('new', {})} disabled={!canManageSections}>
               + Create Wiki Group
             </button>
-          </div>
-
-          <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '1rem' }}>
-            Only wiki_ groups can be created or edited here. Section permissions can still use any backend group.
+            <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>
+              Only wiki_ groups can be created or edited here. Section permissions can still use any backend group.
+            </div>
           </div>
 
           <input
@@ -990,14 +1042,20 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
                   <td style={{ padding: '0.5rem' }}>{groupUserNames[group.name] || 'No members'}</td>
                   <td style={{ padding: '0.5rem' }}>
                     <button className="btn-text" onClick={() => startEditGroup(group.name, group)} disabled={!canManageSections}>Edit Members</button>
-                    <button
-                      className="btn-text"
-                      style={{ color: '#9ca3af', marginLeft: '0.5rem', cursor: canManageSections ? 'pointer' : 'not-allowed' }}
-                      onClick={() => canManageSections && handleDeleteGroup(group.name)}
-                      disabled={!canManageSections}
-                    >
-                      Delete
-                    </button>
+                    {group.name === ADMIN_PERMISSION_GROUP ? (
+                      <span style={{ color: '#9ca3af', marginLeft: '0.5rem', fontSize: '0.85rem' }}>
+                        Protected
+                      </span>
+                    ) : (
+                      <button
+                        className="btn-text"
+                        style={{ color: '#9ca3af', marginLeft: '0.5rem', cursor: canManageSections ? 'pointer' : 'not-allowed' }}
+                        onClick={() => canManageSections && handleDeleteGroup(group.name)}
+                        disabled={!canManageSections}
+                      >
+                        Delete
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1021,6 +1079,14 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
             </button>
            </div>
 
+          <input
+            type="text"
+            placeholder="Filter sections"
+            value={sectionFilter}
+            onChange={e => setSectionFilter(e.target.value)}
+            style={{ marginBottom: '1rem', maxWidth: '320px' }}
+          />
+
           <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem'}}>
             <thead>
               <tr style={{textAlign: 'left', borderBottom: '1px solid #e5e7eb'}}>
@@ -1030,7 +1096,7 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
               </tr>
             </thead>
             <tbody>
-               {Object.values(sections).map(s => (
+               {filteredSections.map(s => (
                 <tr key={s.title} style={{borderBottom: '1px solid #f3f4f6'}}>
                   <td style={{padding: '0.5rem'}}>{s.title}</td>
                   <td style={{padding: '0.5rem'}}>
@@ -1042,7 +1108,7 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
                     {s.reviewRequired && <div style={{fontSize: '0.75rem', color: '#dc2626'}}>Review Required (Approvers: {formatApproverGroups(s.approverGroups)})</div>}
                   </td>
                   <td style={{padding: '0.5rem'}}>
-                    <button className="btn-text" onClick={() => startEditSection(s.title, s)} disabled={!canManageSections}>Edit</button>
+                    <button className="btn-text" onClick={() => startEditSection(s.title, s)} disabled={!canManageSections}>Edit Section</button>
                     <button
                       className="btn-text"
                       style={{color: '#9ca3af', marginLeft: '0.5rem', cursor: canManageSections ? 'pointer' : 'not-allowed'}}
@@ -1060,6 +1126,13 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
                   </td>
                 </tr>
               ))}
+              {filteredSections.length === 0 && (
+                <tr>
+                  <td colSpan="3" style={{ padding: '0.75rem 0.5rem', color: '#6b7280', fontStyle: 'italic' }}>
+                    No sections match this filter.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

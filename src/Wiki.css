@@ -375,7 +375,7 @@
 
 .wiki-admin-picker-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
 }
 
@@ -412,13 +412,31 @@
   background: #f9fafb;
 }
 
+.wiki-picker-item.disabled {
+  cursor: not-allowed;
+  background: #f9fafb;
+}
+
+.wiki-picker-item.disabled:hover {
+  background: #f9fafb;
+}
+
 .wiki-picker-item.selected {
   background: #eff6ff;
+}
+
+.wiki-picker-item.selected.disabled {
+  background: #eef2f7;
 }
 
 .wiki-picker-item input[type="checkbox"] {
   margin-top: 0.2rem;
   accent-color: var(--primary);
+}
+
+.wiki-picker-item.disabled input[type="checkbox"] {
+  accent-color: #9ca3af;
+  cursor: not-allowed;
 }
 
 .wiki-picker-item-body {
@@ -436,6 +454,11 @@
   color: var(--text-secondary);
   margin-top: 0.15rem;
   line-height: 1.4;
+}
+
+.wiki-picker-item.disabled .wiki-picker-item-title,
+.wiki-picker-item.disabled .wiki-picker-item-description {
+  color: #6b7280;
 }
 
 .wiki-picker-summary-label {

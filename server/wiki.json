@@ -26,30 +26,37 @@
         "u1",
         "u2"
       ]
+    },
+    "wiki_admin": {
+      "name": "wiki_admin",
+      "memberIds": []
     }
   },
   "sections": {
     "General": {
       "title": "General",
-      "readGroups": [],
+      "readGroups": [
+        "wiki_admin"
+      ],
       "writeGroups": [
+        "wiki_admin",
         "wiki_editors"
       ],
-      "approverGroups": [
-        "admin"
-      ],
+      "approverGroups": [],
       "reviewRequired": false
     },
     "Restricted Area": {
       "title": "Restricted Area",
       "readGroups": [
+        "wiki_admin",
         "wiki_editors"
       ],
       "writeGroups": [
+        "wiki_admin",
         "wiki_editors"
       ],
       "approverGroups": [
-        "admin"
+        "wiki_admin"
       ],
       "reviewRequired": true
     }

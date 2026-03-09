@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = path.join(__dirname, 'wiki.json');
 const ADMIN_GROUPS = new Set(['admin', 'wiki_admin']);
+const ADMIN_PERMISSION_GROUP = 'wiki_admin';
 
 const SEED_DATA = {
   users: [
@@ -106,6 +107,17 @@ function normalizeGroupName(name) {
   return (name || '').trim();
 }
 
+function normalizePermissionGroups(groupNames, { includeAdminPermission = false } = {}) {
+  const normalizedGroups = dedupe((groupNames || []).map(groupName => {
+    const normalizedName = normalizeGroupName(groupName);
+    return ADMIN_GROUPS.has(normalizedName) ? ADMIN_PERMISSION_GROUP : normalizedName;
+  })).filter(groupName => groupName && groupName !== 'wiki_all');
+
+  return includeAdminPermission
+    ? dedupe([ADMIN_PERMISSION_GROUP, ...normalizedGroups])
+    : normalizedGroups.filter(groupName => groupName !== ADMIN_PERMISSION_GROUP || includeAdminPermission);
+}
+
 function ensureGroup(groups, name, memberIds = []) {
   const normalizedName = normalizeGroupName(name);
   if (!normalizedName) return;
@@ -151,9 +163,11 @@ function normalizeSections(rawSections, groups, validUserIds) {
     const title = (section.title || section.id || key || '').trim();
     if (!title) return;
 
-    let readGroups = Array.isArray(section.readGroups) ? dedupe(section.readGroups.map(normalizeGroupName)).filter(groupName => groupName !== 'wiki_all') : null;
-    let writeGroups = Array.isArray(section.writeGroups) ? dedupe(section.writeGroups.map(normalizeGroupName)) : null;
-    let approverGroups = Array.isArray(section.approverGroups) ? dedupe(section.approverGroups.map(normalizeGroupName)) : null;
+    let readGroups = Array.isArray(section.readGroups) ? normalizePermissionGroups(section.readGroups, { includeAdminPermission: true }) : null;
+    let writeGroups = Array.isArray(section.writeGroups) ? normalizePermissionGroups(section.writeGroups, { includeAdminPermission: true }) : null;
+    let approverGroups = Array.isArray(section.approverGroups)
+      ? normalizePermissionGroups(section.approverGroups, { includeAdminPermission: Boolean(section.reviewRequired) })
+      : null;
 
     if (!readGroups) {
       readGroups = [];
@@ -163,6 +177,7 @@ function normalizeSections(rawSections, groups, validUserIds) {
         ensureGroup(groups, groupName, memberIds);
         readGroups.push(groupName);
       }
+      readGroups = normalizePermissionGroups(readGroups, { includeAdminPermission: true });
     }
 
     if (!writeGroups) {
@@ -173,6 +188,7 @@ function normalizeSections(rawSections, groups, validUserIds) {
         ensureGroup(groups, groupName, memberIds);
         writeGroups.push(groupName);
       }
+      writeGroups = normalizePermissionGroups(writeGroups, { includeAdminPermission: true });
     }
 
     if (!approverGroups) {
@@ -183,6 +199,7 @@ function normalizeSections(rawSections, groups, validUserIds) {
         ensureGroup(groups, groupName, memberIds);
         approverGroups.push(groupName);
       }
+      approverGroups = normalizePermissionGroups(approverGroups, { includeAdminPermission: Boolean(section.reviewRequired) });
     }
 
     [...readGroups, ...writeGroups, ...approverGroups].forEach(groupName => ensureGroup(groups, groupName));
@@ -336,6 +353,7 @@ function hasPendingWikiPageChanges(page, nextContent, nextSectionId) {
 function hasGroupPermission(data, groupNames, userId, { allowPublicWhenEmpty = false } = {}) {
   if (!userId) return false;
   if ((!groupNames || groupNames.length === 0) && allowPublicWhenEmpty) return true;
+  if ((groupNames || []).includes(ADMIN_PERMISSION_GROUP) && isAdminUser(data, userId)) return true;
   const userGroups = new Set(getUserGroupNames(data, userId));
   return (groupNames || []).some(groupName => userGroups.has(groupName));
 }
@@ -413,6 +431,9 @@ export const wikiDataController = {
     const normalizedName = normalizeGroupName(name);
     if (!normalizedName) throw new Error('Group name is required');
     if (!data.groups[normalizedName]) throw new Error('Group not found');
+    if (normalizedName === ADMIN_PERMISSION_GROUP) {
+      throw new Error('wiki_admin cannot be deleted');
+    }
     if (!normalizedName.startsWith('wiki_')) {
       throw new Error('Only wiki_ groups can be deleted here');
     }
@@ -438,9 +459,9 @@ export const wikiDataController = {
 
     data.sections[normalizedTitle] = {
       title: normalizedTitle,
-      readGroups: dedupe(sectionData?.readGroups || []).map(normalizeGroupName),
-      writeGroups: dedupe(sectionData?.writeGroups || []).map(normalizeGroupName),
-      approverGroups: dedupe(sectionData?.approverGroups || []).map(normalizeGroupName),
+      readGroups: normalizePermissionGroups(sectionData?.readGroups || [], { includeAdminPermission: true }),
+      writeGroups: normalizePermissionGroups(sectionData?.writeGroups || [], { includeAdminPermission: true }),
+      approverGroups: normalizePermissionGroups(sectionData?.approverGroups || [], { includeAdminPermission: Boolean(sectionData?.reviewRequired) }),
       reviewRequired: Boolean(sectionData?.reviewRequired)
     };
 
@@ -467,9 +488,9 @@ export const wikiDataController = {
 
     const updatedSection = {
       title: nextTitle,
-      readGroups: dedupe(sectionData?.readGroups || []).map(normalizeGroupName),
-      writeGroups: dedupe(sectionData?.writeGroups || []).map(normalizeGroupName),
-      approverGroups: dedupe(sectionData?.approverGroups || []).map(normalizeGroupName),
+      readGroups: normalizePermissionGroups(sectionData?.readGroups || [], { includeAdminPermission: true }),
+      writeGroups: normalizePermissionGroups(sectionData?.writeGroups || [], { includeAdminPermission: true }),
+      approverGroups: normalizePermissionGroups(sectionData?.approverGroups || [], { includeAdminPermission: Boolean(sectionData?.reviewRequired) }),
       reviewRequired: Boolean(sectionData?.reviewRequired)
     };
 
