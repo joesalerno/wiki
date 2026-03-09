@@ -47,6 +47,22 @@
   overflow-y: auto;
 }
 
+.wiki-nav-search {
+  margin-bottom: 1rem;
+}
+
+.wiki-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wiki-nav-manage-button {
+  font-size: 0.8rem;
+  color: var(--primary);
+  font-weight: 600;
+}
+
 .wiki-nav-list {
   list-style: none;
   padding: 0;
@@ -94,6 +110,8 @@
 }
 
 .wiki-search-input {
+  width: 100%;
+  box-sizing: border-box;
   padding: 0.5rem 0.5rem;
   margin-bottom: 1rem;
   border: 1px solid var(--border-color);

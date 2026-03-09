@@ -669,39 +669,43 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
         </select>
         <div style={{marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
           <span>Role: {currentUser?.isAdmin ? 'Admin' : 'Member'}</span>
-          {canManageSections && (
-            <button
-              className="btn-text"
-              style={{fontSize: '0.75rem', color: '#2563eb', fontWeight: 600}}
-              onClick={onOpenAdmin}
-              title="Manage Sections"
-            >
-              Sections
-            </button>
-          )}
         </div>
       </div>
 
-      <input
-        type="text"
-        className="wiki-search-input"
-        placeholder="Search pages..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-      />
       <div className="wiki-nav" style={{marginTop: '2rem'}}>
 
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
           <span style={{fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase', color: '#9ca3af', letterSpacing: '0.05em'}}>Pages</span>
-          <button
-            onClick={onCreatePage}
-            className="btn btn-secondary"
-            style={{padding: '0.2rem 0.5rem', fontSize: '0.8rem'}}
-            title={canCreatePage ? 'New Page' : 'No writable sections available'}
-            disabled={!canCreatePage}
-          >
-            +
-          </button>
+          <div className="wiki-nav-actions">
+            {canManageSections && (
+              <button
+                className="btn-text wiki-nav-manage-button"
+                onClick={onOpenAdmin}
+                title="Manage Sections"
+              >
+                Sections
+              </button>
+            )}
+            <button
+              onClick={onCreatePage}
+              className="btn btn-secondary"
+              style={{padding: '0.2rem 0.5rem', fontSize: '0.8rem'}}
+              title={canCreatePage ? 'New Page' : 'No writable sections available'}
+              disabled={!canCreatePage}
+            >
+              +
+            </button>
+          </div>
+        </div>
+
+        <div className="wiki-nav-search">
+          <input
+            type="text"
+            className="wiki-search-input"
+            placeholder="Search pages..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
 
         <div className="wiki-nav-list">
