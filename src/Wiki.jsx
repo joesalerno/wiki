@@ -9,6 +9,7 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
   if (!page) return <div>Page not found</div>;
 
   const { title, currentRevision } = page;
+  const currentSectionId = page.sectionId || 'Unassigned';
 
   return (
     <div className="wiki-article">
@@ -34,10 +35,20 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
                {isApprover ? (
                    <ul style={{listStyle: 'none', padding: 0, margin: '0.5rem 0 0'}}>
                        {pendingRevisions.map((rev, idx) => (
+                           (() => {
+                             const targetSectionId = rev.sectionId || currentSectionId;
+                             const sectionChanged = targetSectionId !== currentSectionId;
+
+                             return (
                            <li key={idx} style={{backgroundColor: 'white', padding: '0.5rem', marginBottom: '0.5rem', borderRadius: '0.25rem', border: '1px solid #e5e7eb'}}>
                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem'}}>
                                    <div style={{fontSize: '0.85rem'}}>
                                        <strong>{rev.authorId}</strong> proposed changes on {new Date(rev.timestamp).toLocaleString()}
+                                       {sectionChanged && (
+                                         <div style={{marginTop: '0.35rem', fontSize: '0.8rem', color: '#92400e'}}>
+                                           Section change: <strong>{currentSectionId}</strong> to <strong>{targetSectionId}</strong>
+                                         </div>
+                                       )}
                                    </div>
                                    <div>
                                        <button
@@ -70,6 +81,8 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
                                    ))}
                                </div>
                            </li>
+                               );
+                               })()
                        ))}
                    </ul>
                ) : (
@@ -904,7 +917,12 @@ export default function Wiki() {
             onHistory={() => setViewMode('history')}
             canEdit={canEdit}
             pendingRevisions={currentPageData.pendingRevisions}
-            isApprover={currentUser && sections[currentPageData.sectionId]?.approverUsers.includes(currentUser.id)}
+            isApprover={Boolean(
+              currentUser && (
+                sections[currentPageData.sectionId]?.approverUsers.includes(currentUser.id)
+                || currentPageData.pendingRevisions?.some(revision => sections[revision.sectionId]?.approverUsers.includes(currentUser.id))
+              )
+            )}
             currentUser={currentUser}
             onApprove={async (index) => {
                if(window.confirm("Approve this revision?")) {

@@ -1,4 +1,5 @@
 import Wiki from './Wiki';
+import './App.css';
 import './index.css';
 
 function App() {
