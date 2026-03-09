@@ -658,6 +658,24 @@
   border-bottom: 1px solid #e5e7eb;
 }
 
+.wiki-editor-meta {
+  margin-bottom: 1rem;
+}
+
+.wiki-editor-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.wiki-editor-label {
+  margin-bottom: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .wiki-editor-tabs {
   display: flex;
   gap: 1rem;

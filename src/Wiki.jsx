@@ -467,27 +467,31 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
            </div>
         </div>
 
-        <div style={{display: 'flex', gap: '1rem'}}>
-          <input
-            type="text"
-            className="wiki-input-text"
-            style={{flex: 2}}
-            placeholder="Page Title"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            disabled={!!page}
-          />
-          <select
-             className="wiki-input-text"
-             style={{flex: 1}}
-             value={sectionId}
-             onChange={e => setSectionId(e.target.value)}
-             disabled={!hasAvailableSection}
-          >
-             {sections.map(s => (
-                <option key={s.title} value={s.title}>{s.title}</option>
-             ))}
-          </select>
+        <div className="wiki-editor-meta" style={{display: 'flex', gap: '1rem'}}>
+          <div className="wiki-editor-field" style={{flex: 2}}>
+            <label className="wiki-editor-label">Page Name</label>
+            <input
+              type="text"
+              className="wiki-input-text"
+              placeholder="Page Title"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              disabled={!!page}
+            />
+          </div>
+          <div className="wiki-editor-field" style={{flex: 1}}>
+            <label className="wiki-editor-label">Section</label>
+            <select
+               className="wiki-input-text"
+               value={sectionId}
+               onChange={e => setSectionId(e.target.value)}
+               disabled={!hasAvailableSection}
+            >
+               {sections.map(s => (
+                  <option key={s.title} value={s.title}>{s.title}</option>
+               ))}
+            </select>
+          </div>
         </div>
 
         {!hasAvailableSection && (
@@ -1074,12 +1078,6 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
         {!canManageSections && (
           <div className="wiki-inline-notice">
             Only admin or wiki_admin members can manage groups and sections.
-          </div>
-        )}
-
-        {isEditing && (
-          <div className="wiki-inline-notice" style={{ background: '#f9fafb', color: '#374151', borderColor: '#e5e7eb' }}>
-            You can edit one thing at a time. Finish or close the current editor before opening another.
           </div>
         )}
 
