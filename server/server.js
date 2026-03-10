@@ -148,7 +148,7 @@ const typeDefs = `#graphql
     createWikiSection(input: WikiSectionInput!, userId: ID): WikiSection!
     updateWikiSection(title: String!, input: WikiSectionInput!, userId: ID): WikiSection!
     deleteWikiSection(title: String!, userId: ID): Boolean!
-    saveWikiPage(title: String!, content: String!, userId: ID!, sectionId: ID): WikiPage!
+    saveWikiPage(title: String!, content: String!, userId: ID!, sectionId: ID, originalTitle: String): WikiPage!
     approveWikiRevision(title: ID!, index: Int!, userId: ID!): WikiPage!
     rejectWikiRevision(title: ID!, index: Int!, userId: ID!): WikiPage!
     revertWikiPage(title: ID!, version: Int!, userId: ID!): WikiPage
@@ -186,7 +186,7 @@ const resolvers = {
       await wikiDataController.deleteWikiSection(args.title, resolveUserId(args, context));
       return true;
     },
-    saveWikiPage: (_, args) => wikiDataController.saveWikiPage(args.title, args.content, args.userId, args.sectionId),
+    saveWikiPage: (_, args) => wikiDataController.saveWikiPage(args.title, args.content, args.userId, args.sectionId, args.originalTitle),
     approveWikiRevision: (_, args) => wikiDataController.approveWikiRevision(args.title, args.index, args.userId),
     rejectWikiRevision: (_, args) => wikiDataController.rejectWikiRevision(args.title, args.index, args.userId),
     revertWikiPage: (_, args) => wikiDataController.revertWikiPage(args.title, args.version, args.userId)

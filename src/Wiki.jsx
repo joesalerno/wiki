@@ -287,6 +287,9 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
   const fileInputRef = useRef(null);
   const normalizedTitle = title.trim();
   const isExistingPage = Boolean(page);
+  const isHomePage = page?.title === 'Home';
+  const isTitleChanged = title !== initialResolvedTitle;
+  const isSectionChanged = sectionId !== initialResolvedSectionId;
   const hasAvailableSection = sections.length > 0;
   const hasChanges = title !== initialResolvedTitle
     || content !== initialResolvedContent
@@ -450,7 +453,7 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
               <button className="btn btn-sm btn-secondary" onClick={onCancel}>Cancel</button>
               <button
                 className="btn btn-sm btn-primary"
-                onClick={() => onSave(title, content, sectionId)}
+                onClick={() => onSave(title, content, sectionId, page?.title || null)}
                 disabled={!canSave}
                 title={
                   !hasAvailableSection
@@ -473,22 +476,36 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
             <input
               type="text"
               className="wiki-input-text"
+              style={{ color: isTitleChanged ? '#0000ff' : undefined }}
               placeholder="Page Title"
               value={title}
               onChange={e => setTitle(e.target.value)}
-              disabled={!!page}
+              disabled={isHomePage}
+              title={isHomePage ? 'The Home page cannot be renamed.' : undefined}
             />
           </div>
           <div className="wiki-editor-field" style={{flex: 1}}>
-            <label className="wiki-editor-label">Section</label>
+            <label className="wiki-editor-label" style={{ color: isSectionChanged ? '#0000ff' : undefined }}>Section</label>
             <select
-               className="wiki-input-text"
+              className="wiki-input-text"
+              style={{
+                color: isSectionChanged ? '#0000ff' : '#000000',
+                borderColor: isSectionChanged ? '#0000ff' : undefined,
+                boxShadow: isSectionChanged ? '0 0 0 1px #0000ff inset' : undefined
+              }}
                value={sectionId}
                onChange={e => setSectionId(e.target.value)}
                disabled={!hasAvailableSection}
             >
                {sections.map(s => (
-                  <option key={s.title} value={s.title}>{s.title}</option>
+                  <option
+                    key={s.title}
+                    value={s.title}
+                    className={s.title === initialResolvedSectionId ? 'wiki-section-option-current' : 'wiki-section-option-changed'}
+                    style={{ color: s.title === initialResolvedSectionId ? '#000000' : '#0000ff' }}
+                  >
+                    {s.title}
+                  </option>
                ))}
             </select>
           </div>
@@ -724,7 +741,7 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
   );
 }
 
-function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser }) {
+function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, currentUser }) {
   const [activeTab, setActiveTab] = useState('sections');
   const [editingSectionId, setEditingSectionId] = useState(null);
   const [sectionFormData, setSectionFormData] = useState({});
@@ -742,6 +759,7 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
   const filteredSections = Object.values(sections)
     .sort((left, right) => left.title.localeCompare(right.title))
     .filter(section => section.title.toLowerCase().includes(sectionFilter.toLowerCase()));
+  const homeSectionTitle = Object.values(pages || {}).find(page => page.title === 'Home')?.sectionId || null;
   const filteredUsers = users.filter(user => user.name.toLowerCase().includes(userFilter.toLowerCase()));
   const filteredPermissionGroups = groupOptions.filter(group => group.name.toLowerCase().includes(permissionGroupFilter.toLowerCase()));
   const adminPermissionMembers = getAdminPermissionMemberNames(groups, users);
@@ -898,7 +916,11 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
     }
   };
 
-  const renderSectionForm = () => (
+  const renderSectionForm = () => {
+    const initialSectionTitle = editingSectionId === 'new' ? '' : editingSectionId;
+    const isSectionTitleChanged = (sectionFormData.title || '') !== initialSectionTitle;
+
+    return (
     <div className="admin-form">
       <div className="wiki-admin-editor-header">
         <div>
@@ -912,6 +934,7 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
         <input
           type="text"
           placeholder="Section name"
+          style={{ color: isSectionTitleChanged ? '#0000ff' : undefined }}
           value={sectionFormData.title || ''}
           onChange={e => setSectionFormData({ ...sectionFormData, title: e.target.value })}
         />
@@ -1003,7 +1026,8 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
         <button className="btn btn-sm btn-secondary" onClick={stopEditing}>Close Section Editor</button>
       </div>
     </div>
-  );
+    );
+  };
 
   const renderGroupForm = () => (
     <div className="admin-form" style={{ marginBottom: '1.5rem' }}>
@@ -1211,15 +1235,15 @@ function AdminPanel({ users, groups, sections, onUpdate, onClose, currentUser })
                     <button
                       className="btn-text"
                       style={{color: '#9ca3af', marginLeft: '0.5rem', cursor: canManageSections ? 'pointer' : 'not-allowed'}}
-                      onClick={() => canManageSections && handleDeleteSection(s.title)}
-                      disabled={!canManageSections}
-                      title={canManageSections ? 'Delete Section' : "You don't have permission to delete sections"}
+                      onClick={() => canManageSections && s.title !== homeSectionTitle && handleDeleteSection(s.title)}
+                      disabled={!canManageSections || s.title === homeSectionTitle}
+                      title={s.title === homeSectionTitle ? 'Cannot delete the section that contains the Home page' : (canManageSections ? 'Delete Section' : "You don't have permission to delete sections")}
                     >
                       Delete
                     </button>
-                    {!canManageSections && (
+                    {(!canManageSections || s.title === homeSectionTitle) && (
                       <div style={{fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.25rem'}}>
-                      You don't have permission to delete sections.
+                      {s.title === homeSectionTitle ? 'This section contains the Home page and cannot be deleted.' : "You don't have permission to delete sections."}
                       </div>
                     )}
                   </td>
@@ -1629,6 +1653,7 @@ export default function Wiki() {
                 users={users}
               groups={groups}
                 sections={sections}
+                pages={pages}
                 onUpdate={() => setTick(t => t + 1)}
             onClose={() => setViewMode('read')}
             currentUser={currentUser}
@@ -1684,14 +1709,15 @@ export default function Wiki() {
             initialSectionId={currentPageData.sectionId}
             sections={writableSections}
             onCancel={() => setViewMode('read')}
-            onSave={async (title, content, sectionId) => {
+            onSave={async (title, content, sectionId, originalTitle) => {
               try {
-                const res = await wikiApi.saveWikiPage(title, content, currentUser.id, sectionId);
+                const res = await wikiApi.saveWikiPage(title, content, currentUser.id, sectionId, originalTitle);
                 if (res.status === 'pending') {
                     alert("Changes submitted for review.");
                 }
                 clearCurrentDraft();
                 setEditorHasUnsavedChanges(false);
+                setCurrentPageTitle(title.trim());
                 setTick(t => t + 1); // Trigger data refresh
                 setViewMode('read');
               } catch (e) {

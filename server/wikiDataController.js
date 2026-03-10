@@ -329,21 +329,22 @@ function getDefaultSectionTitle(data) {
   return Object.keys(data.sections || {})[0] || '';
 }
 
-function hasWikiPageChanges(page, nextContent, nextSectionId) {
+function hasWikiPageChanges(page, nextTitle, nextContent, nextSectionId) {
   if (!page) return true;
 
   const currentContent = page.revisions?.[0]?.content || '';
   const currentSectionId = page.sectionId;
+  const currentTitle = page.title;
 
-  return currentContent !== nextContent || currentSectionId !== nextSectionId;
+  return currentTitle !== nextTitle || currentContent !== nextContent || currentSectionId !== nextSectionId;
 }
 
-function hasPendingWikiPageChanges(page, nextContent, nextSectionId) {
+function hasPendingWikiPageChanges(page, nextTitle, nextContent, nextSectionId) {
   if (!Array.isArray(page?.pendingRevisions) || page.pendingRevisions.length === 0) {
     return false;
   }
 
-  return page.pendingRevisions.some(revision => revision.content === nextContent && revision.sectionId === nextSectionId);
+  return page.pendingRevisions.some(revision => revision.title === nextTitle && revision.content === nextContent && revision.sectionId === nextSectionId);
 }
 
 function hasGroupPermission(data, groupNames, userId, { allowPublicWhenEmpty = false } = {}) {
@@ -520,6 +521,9 @@ export const wikiDataController = {
     const normalizedTitle = (title || '').trim();
     if (!normalizedTitle) throw new Error('Title is required');
     if (!data.sections[normalizedTitle]) throw new Error('Section not found');
+    if (data.pages.Home?.sectionId === normalizedTitle) {
+      throw new Error('Cannot delete the section that contains the Home page');
+    }
 
     delete data.sections[normalizedTitle];
 
@@ -576,24 +580,32 @@ export const wikiDataController = {
     };
   },
 
-  async saveWikiPage(title, content, userId, sectionId) {
+  async saveWikiPage(title, content, userId, sectionId, originalTitle = null) {
     const data = await loadData();
     const normalizedTitle = title?.trim();
     if (!normalizedTitle) throw new Error('Title is required');
+    const normalizedOriginalTitle = (originalTitle || normalizedTitle).trim();
+    if (!normalizedOriginalTitle) throw new Error('Original title is required');
+    if (normalizedOriginalTitle === 'Home' && normalizedTitle !== 'Home') {
+      throw new Error('The Home page cannot be renamed');
+    }
+    if (normalizedTitle !== normalizedOriginalTitle && data.pages[normalizedTitle]) {
+      throw new Error('Page already exists');
+    }
 
-    let page = data.pages[normalizedTitle];
+    let page = data.pages[normalizedOriginalTitle];
     const defaultSectionTitle = getDefaultSectionTitle(data);
     const targetSectionId = sectionId || (page ? page.sectionId : defaultSectionTitle);
     const section = data.sections[targetSectionId];
     if (!section) throw new Error('Invalid section');
     if (!getUserById(data, userId)) throw new Error('User not found');
     if (!hasGroupPermission(data, section.writeGroups, userId, { allowPublicWhenEmpty: true })) throw new Error('Permission denied');
-    if (!hasWikiPageChanges(page, content, targetSectionId)) throw new Error('No changes to save');
+    if (!hasWikiPageChanges(page, normalizedTitle, content, targetSectionId)) throw new Error('No changes to save');
 
     const reviewRequired = section.reviewRequired || page?.reviewRequired;
 
     if (reviewRequired) {
-      if (hasPendingWikiPageChanges(page, content, targetSectionId)) {
+      if (hasPendingWikiPageChanges(page, normalizedTitle, content, targetSectionId)) {
         throw new Error('No changes to save');
       }
 
@@ -636,6 +648,10 @@ export const wikiDataController = {
       };
       data.pages[normalizedTitle] = page;
     } else {
+      if (normalizedOriginalTitle !== normalizedTitle) {
+        delete data.pages[normalizedOriginalTitle];
+        data.pages[normalizedTitle] = page;
+      }
       page.title = normalizedTitle;
       page.sectionId = targetSectionId;
     }

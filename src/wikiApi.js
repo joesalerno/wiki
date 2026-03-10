@@ -213,10 +213,10 @@ export const wikiApi = {
     return data.wikiPage;
   },
 
-  async saveWikiPage(title, content, userId, sectionId) {
+  async saveWikiPage(title, content, userId, sectionId, originalTitle) {
     const data = await gqlRequest(
-      `mutation SaveWikiPage($title: String!, $content: String!, $userId: ID!, $sectionId: ID) {
-        saveWikiPage(title: $title, content: $content, userId: $userId, sectionId: $sectionId) {
+      `mutation SaveWikiPage($title: String!, $content: String!, $userId: ID!, $sectionId: ID, $originalTitle: String) {
+        saveWikiPage(title: $title, content: $content, userId: $userId, sectionId: $sectionId, originalTitle: $originalTitle) {
           title
           sectionId
           status
@@ -245,7 +245,7 @@ export const wikiApi = {
           }
         }
       }`,
-      { title, content, userId, sectionId },
+      { title, content, userId, sectionId, originalTitle },
       userId
     );
     return data.saveWikiPage;
