@@ -6,6 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = path.join(__dirname, 'wiki.json');
 const ADMIN_GROUPS = new Set(['admin', 'wiki_admin']);
 const ADMIN_PERMISSION_GROUP = 'wiki_admin';
+const PAGE_REVIEW_MODES = new Set(['inherit', 'required', 'exempt']);
 
 const SEED_DATA = {
   users: [
@@ -43,6 +44,7 @@ const SEED_DATA = {
     Home: {
       title: 'Home',
       sectionId: 'General',
+      reviewMode: 'required',
       revisions: [
         {
           version: 1,
@@ -105,6 +107,10 @@ function normalizeUsers(users) {
 
 function normalizeGroupName(name) {
   return (name || '').trim();
+}
+
+function normalizePageReviewMode(reviewMode, fallback = 'inherit') {
+  return PAGE_REVIEW_MODES.has(reviewMode) ? reviewMode : fallback;
 }
 
 function normalizePermissionGroups(groupNames) {
@@ -237,7 +243,8 @@ function normalizePages(rawPages, sectionIdToTitle, sectionTitles) {
     const normalizedPage = {
       ...page,
       title,
-      sectionId: sectionId || defaultSectionTitle
+      sectionId: sectionId || defaultSectionTitle,
+      reviewMode: normalizePageReviewMode(page.reviewMode, title === 'Home' ? 'required' : 'inherit')
     };
 
     delete normalizedPage.slug;
@@ -327,6 +334,21 @@ async function checkAdmin(userId, data) {
 
 function getDefaultSectionTitle(data) {
   return Object.keys(data.sections || {})[0] || '';
+}
+
+function isPageReviewRequired(page, section) {
+  if (page?.reviewMode === 'required') return true;
+  if (page?.reviewMode === 'exempt') return false;
+  return Boolean(section?.reviewRequired);
+}
+
+function getPageApproverGroups(page, section) {
+  if (!isPageReviewRequired(page, section)) {
+    return [];
+  }
+
+  const approverGroups = section?.approverGroups || [];
+  return approverGroups.length > 0 ? approverGroups : [ADMIN_PERMISSION_GROUP];
 }
 
 function hasWikiPageChanges(page, nextTitle, nextContent, nextSectionId) {
@@ -557,8 +579,12 @@ export const wikiDataController = {
         return {
           title: page.title,
           sectionId: page.sectionId,
+          reviewMode: normalizePageReviewMode(page.reviewMode, page.title === 'Home' ? 'required' : 'inherit'),
+          pendingReviewCount: Array.isArray(page.pendingRevisions) ? page.pendingRevisions.length : 0,
           updatedAt: head.timestamp,
-          authorId: head.authorId
+          authorId: head.authorId,
+          approvedAt: head.approvedAt || head.timestamp,
+          approvedBy: head.approvedBy || head.authorId
         };
       });
   },
@@ -576,6 +602,7 @@ export const wikiDataController = {
 
     return {
       ...page,
+      reviewMode: normalizePageReviewMode(page.reviewMode, page.title === 'Home' ? 'required' : 'inherit'),
       currentRevision: page.revisions[0]
     };
   },
@@ -602,7 +629,7 @@ export const wikiDataController = {
     if (!hasGroupPermission(data, section.writeGroups, userId, { allowPublicWhenEmpty: true })) throw new Error('Permission denied');
     if (!hasWikiPageChanges(page, normalizedTitle, content, targetSectionId)) throw new Error('No changes to save');
 
-    const reviewRequired = section.reviewRequired || page?.reviewRequired;
+    const reviewRequired = isPageReviewRequired(page, section);
 
     if (reviewRequired) {
       if (hasPendingWikiPageChanges(page, normalizedTitle, content, targetSectionId)) {
@@ -613,6 +640,7 @@ export const wikiDataController = {
         page = {
           title: normalizedTitle,
           sectionId: targetSectionId,
+          reviewMode: normalizePageReviewMode(null, normalizedTitle === 'Home' ? 'required' : 'inherit'),
           revisions: [],
           pendingRevisions: []
         };
@@ -644,6 +672,7 @@ export const wikiDataController = {
       page = {
         title: normalizedTitle,
         sectionId: targetSectionId,
+        reviewMode: normalizePageReviewMode(null, normalizedTitle === 'Home' ? 'required' : 'inherit'),
         revisions: []
       };
       data.pages[normalizedTitle] = page;
@@ -672,7 +701,8 @@ export const wikiDataController = {
     const pendingRevision = page.pendingRevisions[index];
     const defaultSectionTitle = getDefaultSectionTitle(data);
     const section = data.sections[pendingRevision.sectionId || page.sectionId || defaultSectionTitle];
-    if (!section || !hasGroupPermission(data, section.approverGroups, userId, { allowPublicWhenEmpty: true })) {
+    const approverGroups = getPageApproverGroups(page, section);
+    if (!section || !hasGroupPermission(data, approverGroups, userId)) {
       throw new Error('Permission denied');
     }
     if (userId === pendingRevision.authorId) {
@@ -707,7 +737,8 @@ export const wikiDataController = {
     const pendingRevision = page.pendingRevisions[index];
     const defaultSectionTitle = getDefaultSectionTitle(data);
     const section = data.sections[pendingRevision.sectionId || page.sectionId || defaultSectionTitle];
-    if (!section || !hasGroupPermission(data, section.approverGroups, userId, { allowPublicWhenEmpty: true })) {
+    const approverGroups = getPageApproverGroups(page, section);
+    if (!section || !hasGroupPermission(data, approverGroups, userId)) {
       throw new Error('Permission denied');
     }
 
@@ -733,5 +764,21 @@ export const wikiDataController = {
     if (!targetRevision) return null;
 
     return this.saveWikiPage(page.title, targetRevision.content, userId, page.sectionId);
+  },
+
+  async updateWikiPageReviewMode(title, reviewMode, userId) {
+    const data = await loadData();
+    await checkAdmin(userId, data);
+
+    const normalizedTitle = (title || '').trim();
+    if (!normalizedTitle) throw new Error('Title is required');
+
+    const page = data.pages[normalizedTitle];
+    if (!page) throw new Error('Page not found');
+
+    page.reviewMode = normalizePageReviewMode(reviewMode, normalizedTitle === 'Home' ? 'required' : 'inherit');
+
+    await saveData(data);
+    return page;
   }
 };

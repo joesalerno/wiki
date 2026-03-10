@@ -150,7 +150,10 @@
 }
 
 .wiki-nav-link {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius);
   cursor: pointer;
@@ -168,6 +171,13 @@
   background: #dbeafe;
   color: var(--primary);
   font-weight: 500;
+}
+
+.wiki-nav-link-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wiki-search-input {
@@ -284,6 +294,67 @@
   display: flex;
   gap: 0.5rem;
   align-items: center;
+}
+
+.wiki-review-indicator {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.wiki-review-indicator.is-clear {
+  background: #16a34a;
+  box-shadow: 0 0 0 2px #dcfce7;
+}
+
+.wiki-review-indicator.is-pending {
+  background: #d97706;
+  box-shadow: 0 0 0 2px #fef3c7;
+}
+
+.wiki-review-indicator-nav {
+  margin-right: 0.1rem;
+}
+
+.wiki-page-policy-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.wiki-review-summary {
+  margin-bottom: 1.25rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.85rem;
+  border: 1px solid transparent;
+}
+
+.wiki-review-summary.is-required {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #92400e;
+}
+
+.wiki-review-summary.is-direct {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.wiki-review-summary-editor {
+  margin-bottom: 1rem;
+}
+
+.wiki-review-summary-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.wiki-review-meta {
+  color: #15803d;
+  font-weight: 600;
 }
 
 .wiki-banner {

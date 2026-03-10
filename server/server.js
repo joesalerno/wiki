@@ -1,6 +1,7 @@
 
 import express from 'express';
 import cors from 'cors';
+import { Buffer } from 'node:buffer';
 import fs from 'fs/promises';
 import path from 'path';
 import { ApolloServer } from '@apollo/server';
@@ -110,6 +111,7 @@ const typeDefs = `#graphql
   type WikiPage {
     title: String!
     sectionId: ID!
+    reviewMode: String!
     revisions: [WikiRevision!]!
     pendingRevisions: [WikiPendingRevision!]
     currentRevision: WikiRevision
@@ -119,8 +121,12 @@ const typeDefs = `#graphql
   type WikiPageSummary {
     title: String!
     sectionId: ID!
+    reviewMode: String!
+    pendingReviewCount: Int!
     updatedAt: Float
     authorId: ID
+    approvedAt: Float
+    approvedBy: ID
   }
 
   input WikiSectionInput {
@@ -148,6 +154,7 @@ const typeDefs = `#graphql
     createWikiSection(input: WikiSectionInput!, userId: ID): WikiSection!
     updateWikiSection(title: String!, input: WikiSectionInput!, userId: ID): WikiSection!
     deleteWikiSection(title: String!, userId: ID): Boolean!
+    updateWikiPageReviewMode(title: ID!, reviewMode: String!, userId: ID): WikiPage!
     saveWikiPage(title: String!, content: String!, userId: ID!, sectionId: ID, originalTitle: String): WikiPage!
     approveWikiRevision(title: ID!, index: Int!, userId: ID!): WikiPage!
     rejectWikiRevision(title: ID!, index: Int!, userId: ID!): WikiPage!
@@ -186,6 +193,7 @@ const resolvers = {
       await wikiDataController.deleteWikiSection(args.title, resolveUserId(args, context));
       return true;
     },
+    updateWikiPageReviewMode: (_, args, context) => wikiDataController.updateWikiPageReviewMode(args.title, args.reviewMode, resolveUserId(args, context)),
     saveWikiPage: (_, args) => wikiDataController.saveWikiPage(args.title, args.content, args.userId, args.sectionId, args.originalTitle),
     approveWikiRevision: (_, args) => wikiDataController.approveWikiRevision(args.title, args.index, args.userId),
     rejectWikiRevision: (_, args) => wikiDataController.rejectWikiRevision(args.title, args.index, args.userId),

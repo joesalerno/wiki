@@ -2,7 +2,7 @@ import React from 'react';
 
 function parseInline(text, keyPrefix = 'inline') {
   const segments = [];
-  const pattern = /(!\[[^\]]*\]\([^\)]+\)|\[[^\]]+\]\([^\)]+\)|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  const pattern = /(!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]+\)|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
   let lastIndex = 0;
   let match;
   let tokenIndex = 0;
@@ -16,7 +16,7 @@ function parseInline(text, keyPrefix = 'inline') {
     const key = `${keyPrefix}-${tokenIndex}`;
 
     if (token.startsWith('![')) {
-      const imageMatch = token.match(/^!\[([^\]]*)\]\(([^\)]+)\)$/);
+      const imageMatch = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
       if (imageMatch) {
         segments.push(
           <img
@@ -30,7 +30,7 @@ function parseInline(text, keyPrefix = 'inline') {
         segments.push(token);
       }
     } else if (token.startsWith('[')) {
-      const linkMatch = token.match(/^\[([^\]]+)\]\(([^\)]+)\)$/);
+      const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (linkMatch) {
         segments.push(
           <a key={key} href={linkMatch[2]} target="_blank" rel="noreferrer">

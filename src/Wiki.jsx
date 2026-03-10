@@ -64,7 +64,72 @@ function formatWriteGroups(items) {
 
 function formatApproverGroups(items) {
   const visibleItems = stripAdminPermission(items);
+  if (visibleItems.length === 0 && (items || []).includes(ADMIN_PERMISSION_GROUP)) {
+    return 'Admins';
+  }
   return visibleItems.length > 0 ? visibleItems.join(', ') : 'Anyone';
+}
+
+function isPageReviewRequired(page, section) {
+  if (page?.reviewMode === 'required') return true;
+  if (page?.reviewMode === 'exempt') return false;
+  return Boolean(section?.reviewRequired);
+}
+
+function getPageApproverGroups(page, section) {
+  if (!isPageReviewRequired(page, section)) {
+    return [];
+  }
+
+  const approverGroups = section?.approverGroups || [];
+  return approverGroups.length > 0 ? approverGroups : [ADMIN_PERMISSION_GROUP];
+}
+
+function canApprovePageReview(page, section, user) {
+  const approverGroups = getPageApproverGroups(page, section);
+  if (approverGroups.length === 0) {
+    return false;
+  }
+  return hasGroupAccess(approverGroups, user);
+}
+
+function formatPageReviewMode(reviewMode) {
+  if (reviewMode === 'required') return 'Required';
+  if (reviewMode === 'exempt') return 'Exempt';
+  return 'Inherit';
+}
+
+function getReviewIndicatorClassName(pendingReviewCount, extraClassName = '') {
+  return [
+    'wiki-review-indicator',
+    pendingReviewCount > 0 ? 'is-pending' : 'is-clear',
+    extraClassName
+  ].filter(Boolean).join(' ');
+}
+
+function formatReviewIndicatorTitle(page) {
+  if ((page?.pendingReviewCount || 0) > 0) {
+    return page.pendingReviewCount === 1
+      ? '1 change is waiting for review'
+      : `${page.pendingReviewCount} changes are waiting for review`;
+  }
+
+  const reviewedAt = page?.approvedAt || page?.updatedAt;
+  const reviewedBy = page?.approvedBy || page?.authorId;
+
+  if (reviewedAt && reviewedBy) {
+    return `Reviewed ${new Date(reviewedAt).toLocaleDateString()} by ${reviewedBy}`;
+  }
+
+  return 'Reviewed';
+}
+
+function getDraftReviewMode(page, title) {
+  if (page?.reviewMode) {
+    return page.reviewMode;
+  }
+
+  return title?.trim() === 'Home' ? 'required' : 'inherit';
 }
 
 function SelectionChips({ items, emptyLabel }) {
@@ -139,6 +204,7 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
 
   const { title, currentRevision } = page;
   const currentSectionId = page.sectionId || 'Unassigned';
+  const reviewedById = currentRevision?.approvedBy || null;
 
   return (
     <div className="wiki-article">
@@ -234,6 +300,11 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
                 v{currentRevision.version}
               </span>
               <span>Updated {new Date(currentRevision.timestamp).toLocaleDateString()} by {currentRevision.authorId}</span>
+              {currentRevision.approvedAt && reviewedById && (
+                <span className="wiki-review-meta">
+                  Reviewed {new Date(currentRevision.approvedAt).toLocaleDateString()} by {reviewedById}
+                </span>
+              )}
             </>
           )}
           {!currentRevision && <span>No published content.</span>}
@@ -247,7 +318,7 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
   );
 }
 
-function PageEditor({ page, initialTitle, initialContent, initialSectionId, sections, onSave, onCancel, onDirtyChange }) {
+function PageEditor({ page, initialTitle, initialContent, initialSectionId, initialReviewMode, sections, onSave, onCancel, onDirtyChange }) {
   const initialResolvedTitle = initialTitle || '';
   const initialResolvedContent = initialContent || '';
   const initialResolvedSectionId = initialSectionId || (sections[0]?.title || '');
@@ -271,6 +342,10 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
   const canSave = !isUploading && hasChanges && hasAvailableSection && (isExistingPage || normalizedTitle.length > 0);
   const draftStorageKey = page ? `wiki_draft:${page.title}` : 'wiki_draft:new_page';
   const [draftInitialized, setDraftInitialized] = useState(false);
+  const activeSection = sections.find(section => section.title === sectionId) || null;
+  const draftReviewMode = getDraftReviewMode(page ? { ...page, reviewMode: initialReviewMode } : null, title);
+  const reviewRequired = isPageReviewRequired({ reviewMode: draftReviewMode }, activeSection);
+  const approverGroups = getPageApproverGroups({ reviewMode: draftReviewMode }, activeSection);
 
   useEffect(() => {
     if (!sections.length) {
@@ -436,7 +511,9 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
                       ? 'No changes to save'
                       : isUploading
                         ? 'Upload in progress'
-                        : 'Save changes'
+                        : reviewRequired
+                          ? 'Submit changes for review'
+                          : 'Publish changes'
                 }
               >
                 Save Changes
@@ -491,6 +568,14 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
           </div>
         )}
 
+        {hasAvailableSection && (
+          <div className={`wiki-review-summary wiki-review-summary-editor ${reviewRequired ? 'is-required' : 'is-direct'}`}>
+            <div className="wiki-review-summary-title">
+              {reviewRequired ? `Saves submit for review by ${formatApproverGroups(approverGroups)}.` : 'Saves publish immediately.'}
+            </div>
+          </div>
+        )}
+
         <div className="wiki-editor-tabs-row">
           <div className="wiki-editor-tabs">
             <button
@@ -527,7 +612,7 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, sect
             aria-hidden={!hasChanges}
           >
             <span>
-              Unsaved changes will be restored when you reopen this editor on this device.
+              Locally saved changes will be restored when you reopen this editor on this device.
             </span>
           </div>
         </div>
@@ -720,10 +805,13 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
   const [editingSectionId, setEditingSectionId] = useState(null);
   const [sectionFormData, setSectionFormData] = useState({});
   const [editingGroupName, setEditingGroupName] = useState(null);
+  const [editingPageTitle, setEditingPageTitle] = useState(null);
+  const [pageReviewMode, setPageReviewMode] = useState('inherit');
   const [groupFormName, setGroupFormName] = useState('wiki_');
   const [groupMemberIds, setGroupMemberIds] = useState([]);
   const [groupFilter, setGroupFilter] = useState('');
   const [sectionFilter, setSectionFilter] = useState('');
+  const [pageFilter, setPageFilter] = useState('');
   const [userFilter, setUserFilter] = useState('');
   const [permissionGroupFilter, setPermissionGroupFilter] = useState('');
   const canManageSections = Boolean(currentUser?.isAdmin);
@@ -733,6 +821,9 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
   const filteredSections = Object.values(sections)
     .sort((left, right) => left.title.localeCompare(right.title))
     .filter(section => section.title.toLowerCase().includes(sectionFilter.toLowerCase()));
+  const filteredPages = [...pages]
+    .sort((left, right) => left.title.localeCompare(right.title))
+    .filter(page => page.title.toLowerCase().includes(pageFilter.toLowerCase()));
   const homeSectionTitle = Object.values(pages || {}).find(page => page.title === 'Home')?.sectionId || null;
   const filteredUsers = users.filter(user => user.name.toLowerCase().includes(userFilter.toLowerCase()));
   const filteredPermissionGroups = groupOptions.filter(group => group.name.toLowerCase().includes(permissionGroupFilter.toLowerCase()));
@@ -747,7 +838,8 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
   );
   const isEditingGroup = editingGroupName !== null;
   const isEditingSection = editingSectionId !== null;
-  const isEditing = isEditingGroup || isEditingSection;
+  const isEditingPage = editingPageTitle !== null;
+  const isEditing = isEditingGroup || isEditingSection || isEditingPage;
 
   const toggleSelectedValue = (values, value) => (
     values.includes(value)
@@ -782,6 +874,7 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
 
     setActiveTab('sections');
     setEditingGroupName(null);
+    setEditingPageTitle(null);
     setUserFilter('');
     setEditingSectionId(title);
     if (title === 'new') {
@@ -812,6 +905,7 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
 
     setActiveTab('groups');
     setEditingSectionId(null);
+    setEditingPageTitle(null);
     setPermissionGroupFilter('');
     setEditingGroupName(name);
     if (name === 'new') {
@@ -826,9 +920,20 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
     setGroupMemberIds(data?.memberIds || []);
   };
 
+  const startEditPage = (page) => {
+    if (!canManageSections) return;
+
+    setActiveTab('pages');
+    setEditingSectionId(null);
+    setEditingGroupName(null);
+    setEditingPageTitle(page.title);
+    setPageReviewMode(page.reviewMode || 'inherit');
+  };
+
   const stopEditing = () => {
     setEditingSectionId(null);
     setEditingGroupName(null);
+    setEditingPageTitle(null);
     setPermissionGroupFilter('');
     setUserFilter('');
   };
@@ -885,6 +990,16 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
     try {
       await wikiApi.deleteWikiGroup(name, currentUser?.id);
       onUpdate();
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  const handleSavePage = async () => {
+    try {
+      await wikiApi.updateWikiPageReviewMode(editingPageTitle, pageReviewMode, currentUser?.id);
+      onUpdate();
+      stopEditing();
     } catch (error) {
       alert(error.message);
     }
@@ -1065,17 +1180,58 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
     </div>
   );
 
+  const renderPageForm = () => {
+    const currentPage = pages.find(page => page.title === editingPageTitle);
+    const currentSection = currentPage ? sections[currentPage.sectionId] : null;
+
+    return (
+      <div className="admin-form" style={{ marginBottom: '1.5rem' }}>
+        <div className="wiki-admin-editor-header">
+          <div>
+            <h2 className="wiki-admin-editor-title">Editing {editingPageTitle}</h2>
+            <div className="wiki-admin-editor-subtitle">Override the section review rule only when a page needs special handling.</div>
+          </div>
+        </div>
+
+        <div className="wiki-admin-field">
+          <label className="wiki-admin-label">Review Policy</label>
+          <select
+            className="wiki-input-text"
+            value={pageReviewMode}
+            onChange={event => setPageReviewMode(event.target.value)}
+            style={{ fontSize: '1rem', fontWeight: 500 }}
+          >
+            <option value="inherit">Inherit section policy</option>
+            <option value="required">Require review</option>
+            <option value="exempt">Skip review</option>
+          </select>
+          <div className="wiki-admin-help">
+            Current section rule: {currentSection?.reviewRequired ? 'review required' : 'review not required'}.
+          </div>
+          <div className="wiki-admin-help">
+            If review is required and the section has no approver groups, approval falls back to admins.
+          </div>
+        </div>
+
+        <div className="admin-actions" style={{ marginTop: '1rem' }}>
+          <button className="btn btn-sm btn-primary" onClick={handleSavePage}>Save</button>
+          <button className="btn btn-sm btn-secondary" onClick={stopEditing}>Close Page Editor</button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="wiki-article">
       <div className="wiki-content-area">
         <div className="wiki-header">
-          <h1 className="wiki-header-title">Section Management</h1>
+          <h1 className="wiki-header-title">Wiki Management</h1>
           <button className="btn btn-sm btn-secondary" onClick={onClose}>Close</button>
         </div>
 
         {!canManageSections && (
           <div className="wiki-inline-notice">
-            Only admin or wiki_admin members can manage groups and sections.
+            Only admin or wiki_admin members can manage groups, sections, and page policies.
           </div>
         )}
 
@@ -1100,10 +1256,21 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
           >
             Groups
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'pages'}
+            className={`wiki-admin-tab ${activeTab === 'pages' ? 'active' : ''}`}
+            onClick={() => !isEditing && setActiveTab('pages')}
+            disabled={isEditing && !isEditingPage}
+          >
+            Pages
+          </button>
         </div>
 
         {isEditingGroup && renderGroupForm()}
         {isEditingSection && renderSectionForm()}
+        {isEditingPage && renderPageForm()}
 
         {!isEditing && activeTab === 'groups' && (
         <div style={{ marginBottom: '2rem' }}>
@@ -1227,6 +1394,63 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
                 <tr>
                   <td colSpan="3" style={{ padding: '0.75rem 0.5rem', color: '#6b7280', fontStyle: 'italic' }}>
                     No sections match this filter.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        )}
+
+        {!isEditing && activeTab === 'pages' && (
+        <div>
+          <input
+            type="text"
+            placeholder="Filter pages"
+            value={pageFilter}
+            onChange={e => setPageFilter(e.target.value)}
+            style={{ marginBottom: '1rem', maxWidth: '320px' }}
+          />
+
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+            <thead>
+              <tr style={{ textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
+                <th style={{ padding: '0.5rem' }}>Page</th>
+                <th style={{ padding: '0.5rem' }}>Section</th>
+                <th style={{ padding: '0.5rem' }}>Review Policy</th>
+                <th style={{ padding: '0.5rem' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPages.map(page => {
+                const section = sections[page.sectionId];
+
+                return (
+                  <tr key={page.title} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    <td style={{ padding: '0.5rem' }}>{page.title}</td>
+                    <td style={{ padding: '0.5rem' }}>{page.sectionId}</td>
+                    <td style={{ padding: '0.5rem' }}>
+                      <div className="wiki-page-policy-cell">
+                        <span>{formatPageReviewMode(page.reviewMode)}</span>
+                        {isPageReviewRequired(page, section) && (
+                          <span
+                            className={getReviewIndicatorClassName(page.pendingReviewCount)}
+                            title={formatReviewIndicatorTitle(page)}
+                            aria-label={formatReviewIndicatorTitle(page)}
+                          />
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ padding: '0.5rem' }}>
+                      <button className="btn-text" onClick={() => startEditPage(page)} disabled={!canManageSections}>Edit Policy</button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredPages.length === 0 && (
+                <tr>
+                  <td colSpan="4" style={{ padding: '0.75rem 0.5rem', color: '#6b7280', fontStyle: 'italic' }}>
+                    No pages match this filter.
                   </td>
                 </tr>
               )}
@@ -1385,7 +1609,14 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
                         }}
                         className={`wiki-nav-link ${currentPageTitle === page.title ? 'active' : ''}`}
                       >
-                        {page.title}
+                        <span className="wiki-nav-link-label">{page.title}</span>
+                        {isPageReviewRequired(page, sections[page.sectionId]) && (
+                          <span
+                            className={getReviewIndicatorClassName(page.pendingReviewCount, 'wiki-review-indicator-nav')}
+                            title={formatReviewIndicatorTitle(page)}
+                            aria-label={formatReviewIndicatorTitle(page)}
+                          />
+                        )}
                       </a>
                       </li>
                      ))}
@@ -1422,7 +1653,6 @@ export default function Wiki({ currentUser, users, groups, onIdentityDataChange 
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [tick, setTick] = useState(0); // Force update trigger
-  const [editorHasUnsavedChanges, setEditorHasUnsavedChanges] = useState(false);
 
   // Load Initial Data
   useEffect(() => {
@@ -1446,13 +1676,13 @@ export default function Wiki({ currentUser, users, groups, onIdentityDataChange 
           return acc;
         }, {});
 
-        const nextPageTitle = loadedPages.some(page => page.title === currentPageTitle)
-          ? currentPageTitle
-          : (loadedPages[0]?.title || null);
-
         setPages(loadedPages);
         setSections(sectionMap);
-        setCurrentPageTitle(nextPageTitle);
+        setCurrentPageTitle(previousPageTitle => (
+          loadedPages.some(page => page.title === previousPageTitle)
+            ? previousPageTitle
+            : (loadedPages[0]?.title || null)
+        ));
         setErrorMessage('');
       } catch (error) {
         setErrorMessage(error.message || 'Failed to load wiki data');
@@ -1595,8 +1825,8 @@ export default function Wiki({ currentUser, users, groups, onIdentityDataChange 
             pendingRevisions={currentPageData.pendingRevisions}
             isApprover={Boolean(
               currentUser && (
-                hasGroupAccess(sections[currentPageData.sectionId]?.approverGroups, currentUser)
-                || currentPageData.pendingRevisions?.some(revision => hasGroupAccess(sections[revision.sectionId]?.approverGroups, currentUser))
+                canApprovePageReview(currentPageData, sections[currentPageData.sectionId], currentUser)
+                || currentPageData.pendingRevisions?.some(revision => canApprovePageReview(currentPageData, sections[revision.sectionId], currentUser))
               )
             )}
             currentUser={currentUser}
@@ -1633,6 +1863,7 @@ export default function Wiki({ currentUser, users, groups, onIdentityDataChange 
             initialTitle={currentPageData.title}
             initialContent={currentPageContent}
             initialSectionId={currentPageData.sectionId}
+            initialReviewMode={currentPageData.reviewMode}
             sections={writableSections}
             onCancel={() => setViewMode('read')}
             onSave={async (title, content, sectionId, originalTitle) => {
@@ -1642,7 +1873,6 @@ export default function Wiki({ currentUser, users, groups, onIdentityDataChange 
                     alert("Changes submitted for review.");
                 }
                 clearCurrentDraft();
-                setEditorHasUnsavedChanges(false);
                 setCurrentPageTitle(title.trim());
                 setTick(t => t + 1); // Trigger data refresh
                 setViewMode('read');
@@ -1650,7 +1880,6 @@ export default function Wiki({ currentUser, users, groups, onIdentityDataChange 
                 alert(e.message);
               }
             }}
-            onDirtyChange={setEditorHasUnsavedChanges}
           />
         )}
 
@@ -1661,6 +1890,7 @@ export default function Wiki({ currentUser, users, groups, onIdentityDataChange 
             initialTitle=""
             initialContent=""
             initialSectionId={null}
+            initialReviewMode="inherit"
             sections={writableSections}
             onCancel={() => setViewMode('read')}
             onSave={async (title, content, sectionId) => {
@@ -1677,7 +1907,6 @@ export default function Wiki({ currentUser, users, groups, onIdentityDataChange 
                     // Go to home or stay?
                 }
                 clearCurrentDraft();
-                setEditorHasUnsavedChanges(false);
                 setCurrentPageTitle(normalizedTitle);
                 setTick(t => t + 1);
                 setViewMode('read');
@@ -1685,7 +1914,6 @@ export default function Wiki({ currentUser, users, groups, onIdentityDataChange 
                  alert(e.message);
               }
             }}
-            onDirtyChange={setEditorHasUnsavedChanges}
           />
         )}
 

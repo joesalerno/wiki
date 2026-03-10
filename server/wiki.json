@@ -54,12 +54,15 @@
     "Home": {
       "title": "Home",
       "sectionId": "General",
+      "reviewMode": "required",
       "revisions": [
         {
           "version": 1,
           "content": "# About This Wiki\n\nThis wiki is a lightweight knowledge base for shared notes, team docs, and internal reference pages.\n\n## Features\n\n- Browse pages by section and filter them with search\n- Write in Markdown with a built-in preview\n- Upload images and files directly into pages\n- Review revision history and compare older changes\n- Revert to an earlier version when needed\n- Control access with section-based read and write permissions\n- Route updates through approval when a section requires review\n\n## How to use it\n\n1. Open a page from the sidebar or create a new one.\n2. Edit in Markdown, then switch to Preview before saving.\n3. Use History to inspect changes or restore an older revision.\n4. In sections that require review, approvers can accept or reject pending edits.",
           "authorId": "u1",
-          "timestamp": 1773101188990
+          "timestamp": 1773108792581,
+          "approvedBy": "u1",
+          "approvedAt": 1773108792581
         }
       ]
     },
@@ -71,9 +74,12 @@
           "version": 1,
           "content": "Shhh",
           "authorId": "u1",
-          "timestamp": 1773101188990
+          "timestamp": 1773108792581,
+          "approvedBy": "u1",
+          "approvedAt": 1773108792581
         }
-      ]
+      ],
+      "reviewMode": "inherit"
     },
     "Top Secret": {
       "title": "Top Secret",
@@ -84,10 +90,11 @@
           "content": "This is top secret.",
           "title": "Top Secret",
           "authorId": "u2",
-          "timestamp": 1773101188990,
+          "timestamp": 1773108792581,
           "sectionId": "Restricted Area"
         }
-      ]
+      ],
+      "reviewMode": "inherit"
     }
   }
 }

@@ -166,8 +166,12 @@ export const wikiApi = {
         wikiPages(userId: $userId) {
           title
           sectionId
+          reviewMode
+          pendingReviewCount
           updatedAt
           authorId
+          approvedAt
+          approvedBy
         }
       }`,
       { userId: resolvedUserId },
@@ -183,6 +187,7 @@ export const wikiApi = {
         wikiPage(title: $title, userId: $userId) {
           title
           sectionId
+          reviewMode
           revisions {
             version
             content
@@ -212,6 +217,22 @@ export const wikiApi = {
       resolvedUserId
     );
     return data.wikiPage;
+  },
+
+  async updateWikiPageReviewMode(title, reviewMode, userId) {
+    const resolvedUserId = resolveWikiUserId(userId);
+    const data = await gqlRequest(
+      `mutation UpdateWikiPageReviewMode($title: ID!, $reviewMode: String!, $userId: ID) {
+        updateWikiPageReviewMode(title: $title, reviewMode: $reviewMode, userId: $userId) {
+          title
+          sectionId
+          reviewMode
+        }
+      }`,
+      { title, reviewMode, userId: resolvedUserId },
+      resolvedUserId
+    );
+    return data.updateWikiPageReviewMode;
   },
 
   async saveWikiPage(title, content, userId, sectionId, originalTitle) {

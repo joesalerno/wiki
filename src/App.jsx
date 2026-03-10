@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Wiki from './Wiki';
 import { wikiApi } from './wikiApi';
 import './App.css';
@@ -45,7 +45,7 @@ function App() {
 
   const currentUser = users.find(user => user.id === currentUserId) || null;
 
-  const loadIdentityData = async (preferredUserId) => {
+  const loadIdentityData = useCallback(async (preferredUserId) => {
     try {
       setIsIdentityLoading(true);
 
@@ -77,11 +77,11 @@ function App() {
     } finally {
       setIsIdentityLoading(false);
     }
-  };
+  }, [currentUserId]);
 
   useEffect(() => {
     loadIdentityData();
-  }, []);
+  }, [loadIdentityData]);
 
   const handleSwitchUser = (userId) => {
     setCurrentUserId(userId);
