@@ -204,7 +204,8 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
 
   const { title, currentRevision } = page;
   const currentSectionId = page.sectionId || 'Unassigned';
-  const reviewedById = currentRevision?.approvedBy || null;
+  const reviewedAt = currentRevision?.approvedAt || currentRevision?.timestamp || null;
+  const reviewedById = currentRevision?.approvedBy || currentRevision?.authorId || null;
 
   return (
     <div className="wiki-article">
@@ -300,9 +301,9 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
                 v{currentRevision.version}
               </span>
               <span>Updated {new Date(currentRevision.timestamp).toLocaleDateString()} by {currentRevision.authorId}</span>
-              {currentRevision.approvedAt && reviewedById && (
+              {reviewedAt && reviewedById && (
                 <span className="wiki-review-meta">
-                  Reviewed {new Date(currentRevision.approvedAt).toLocaleDateString()} by {reviewedById}
+                  Reviewed {new Date(reviewedAt).toLocaleDateString()} by {reviewedById}
                 </span>
               )}
             </>
@@ -498,6 +499,11 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, init
            )}
 
            <div className="wiki-header-actions">
+              {hasChanges && (
+                <div className="wiki-editor-status wiki-header-status">
+                  <span>Changes saved locally on this device.</span>
+                </div>
+              )}
               <button className="btn btn-sm btn-secondary" onClick={handleReset} disabled={!hasChanges || isUploading}>Reset</button>
               <button className="btn btn-sm btn-secondary" onClick={onCancel}>Cancel</button>
               <button
@@ -606,14 +612,6 @@ function PageEditor({ page, initialTitle, initialContent, initialSectionId, init
             >
               Preview
             </button>
-          </div>
-          <div
-            className={`wiki-editor-status wiki-editor-status-inline ${hasChanges ? '' : 'is-hidden'}`}
-            aria-hidden={!hasChanges}
-          >
-            <span>
-              Locally saved changes will be restored when you reopen this editor on this device.
-            </span>
           </div>
         </div>
 
