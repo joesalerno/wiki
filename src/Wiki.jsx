@@ -812,7 +812,7 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
   );
 }
 
-function AdminPanel({ groups, sections, pages, onUpdate, onClose, currentUser }) {
+function AdminPanel({ sections, pages, onUpdate, onClose, currentUser }) {
   const [activeTab, setActiveTab] = useState('sections');
   const [editingSectionId, setEditingSectionId] = useState(null);
   const [sectionFormData, setSectionFormData] = useState({});
@@ -828,38 +828,91 @@ function AdminPanel({ groups, sections, pages, onUpdate, onClose, currentUser })
   const [permissionGroupFilter, setPermissionGroupFilter] = useState('');
   const canManageSections = Boolean(currentUser?.isAdmin);
   const [users, setUsers] = useState([]);
+  const [groups, setGroups] = useState({});
+  const [managementDataError, setManagementDataError] = useState('');
+  const [isManagementDataLoading, setIsManagementDataLoading] = useState(false);
   const [userDirectoryError, setUserDirectoryError] = useState('');
-  const [isUserDirectoryLoading, setIsUserDirectoryLoading] = useState(false);
+
+  const loadManagementData = async () => {
+    if (!canManageSections) {
+      setUsers([]);
+      setGroups({});
+      setManagementDataError('');
+      return;
+    }
+
+    try {
+      setIsManagementDataLoading(true);
+      const [loadedUsers, loadedGroups] = await Promise.all([
+        wikiApi.getWikiUsers(),
+        wikiApi.getWikiGroups()
+      ]);
+
+      setUsers(loadedUsers);
+      setGroups(Object.fromEntries(
+        loadedGroups.map(group => {
+          const memberIds = (group.users || []).map(user => user.id);
+          return [group.name, { ...group, memberIds }];
+        })
+      ));
+      setManagementDataError('');
+      setUserDirectoryError('');
+    } catch (error) {
+      setUsers([]);
+      setGroups({});
+      const message = error.message || 'Failed to load management data';
+      setManagementDataError(message);
+      setUserDirectoryError(message);
+    } finally {
+      setIsManagementDataLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!canManageSections) {
       setUsers([]);
+      setGroups({});
+      setManagementDataError('');
       setUserDirectoryError('');
-      setIsUserDirectoryLoading(false);
+      setIsManagementDataLoading(false);
       return undefined;
     }
 
     let isCancelled = false;
 
-    const loadUsers = async () => {
+    const loadData = async () => {
       try {
-        setIsUserDirectoryLoading(true);
-        const loadedUsers = await wikiApi.getWikiUsers();
+        setIsManagementDataLoading(true);
+        const [loadedUsers, loadedGroups] = await Promise.all([
+          wikiApi.getWikiUsers(),
+          wikiApi.getWikiGroups()
+        ]);
         if (isCancelled) return;
+
         setUsers(loadedUsers);
+        setGroups(Object.fromEntries(
+          loadedGroups.map(group => {
+            const memberIds = (group.users || []).map(user => user.id);
+            return [group.name, { ...group, memberIds }];
+          })
+        ));
+        setManagementDataError('');
         setUserDirectoryError('');
       } catch (error) {
         if (isCancelled) return;
+        const message = error.message || 'Failed to load management data';
         setUsers([]);
-        setUserDirectoryError(error.message || 'Failed to load wiki users');
+        setGroups({});
+        setManagementDataError(message);
+        setUserDirectoryError(message);
       } finally {
         if (!isCancelled) {
-          setIsUserDirectoryLoading(false);
+          setIsManagementDataLoading(false);
         }
       }
     };
 
-    loadUsers();
+    loadData();
 
     return () => {
       isCancelled = true;
@@ -1031,6 +1084,7 @@ function AdminPanel({ groups, sections, pages, onUpdate, onClose, currentUser })
         await wikiApi.createWikiGroup(normalizedName, currentUser?.id);
       }
       await wikiApi.updateWikiGroup(normalizedName, groupMemberIds, currentUser?.id);
+      await loadManagementData();
       onUpdate();
       stopEditing();
     } catch (error) {
@@ -1048,6 +1102,7 @@ function AdminPanel({ groups, sections, pages, onUpdate, onClose, currentUser })
 
     try {
       await wikiApi.deleteWikiGroup(name, currentUser?.id);
+      await loadManagementData();
       onUpdate();
     } catch (error) {
       alert(error.message);
@@ -1231,7 +1286,7 @@ function AdminPanel({ groups, sections, pages, onUpdate, onClose, currentUser })
         options={userChecklistOptions}
         selectedValues={groupMemberIds}
         onToggle={(value) => setGroupMemberIds(toggleSelectedValue(groupMemberIds, value))}
-        emptyResultsLabel={isUserDirectoryLoading ? 'Loading users...' : 'No users match this filter.'}
+        emptyResultsLabel={isManagementDataLoading ? 'Loading users...' : 'No users match this filter.'}
         selectedSummaryLabel="Selected members"
         emptySelectionLabel="No members selected"
         height={220}
@@ -1297,6 +1352,12 @@ function AdminPanel({ groups, sections, pages, onUpdate, onClose, currentUser })
         {!canManageSections && (
           <div className="wiki-inline-notice">
             Only admin or wiki_admin members can manage groups, sections, and page policies.
+          </div>
+        )}
+
+        {canManageSections && managementDataError && (
+          <div className="wiki-inline-notice">
+            {managementDataError}
           </div>
         )}
 
@@ -1708,7 +1769,7 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
 
 // --- Main Wiki Component ---
 
-export default function Wiki({ currentUser, groups, onIdentityDataChange }) {
+export default function Wiki({ currentUser }) {
   // State
   const [pages, setPages] = useState([]);
   const [sections, setSections] = useState({});
@@ -1868,13 +1929,11 @@ export default function Wiki({ currentUser, groups, onIdentityDataChange }) {
 
         {viewMode === 'admin' && (
             <AdminPanel
-              groups={groups}
                 sections={sections}
                 pages={pages}
-                onUpdate={() => {
-                  setTick(t => t + 1);
-                  onIdentityDataChange?.();
-                }}
+              onUpdate={() => {
+                setTick(t => t + 1);
+              }}
             onClose={() => setViewMode('read')}
             currentUser={currentUser}
             />

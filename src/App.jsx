@@ -145,8 +145,6 @@ function App() {
         {!isIdentityLoading && currentUser && (
           <Wiki
             currentUser={currentUser}
-            groups={groups}
-            onIdentityDataChange={() => loadIdentityData(currentUserId)}
           />
         )}
 
