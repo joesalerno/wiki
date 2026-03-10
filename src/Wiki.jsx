@@ -10,6 +10,12 @@ function dedupeItems(values) {
   return [...new Set((values || []).filter(Boolean))];
 }
 
+function getUserGroups(groups, userId) {
+  return Object.values(groups || {})
+    .filter(group => (group.memberIds || []).includes(userId))
+    .map(group => group.name);
+}
+
 function withRequiredAdminPermission(groups) {
   return dedupeItems([
     ADMIN_PERMISSION_GROUP,
@@ -806,7 +812,7 @@ function PageHistory({ page, onBack, onRevert, canRevert }) {
   );
 }
 
-function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, currentUser }) {
+function AdminPanel({ groups, sections, pages, onUpdate, onClose, currentUser }) {
   const [activeTab, setActiveTab] = useState('sections');
   const [editingSectionId, setEditingSectionId] = useState(null);
   const [sectionFormData, setSectionFormData] = useState({});
@@ -821,6 +827,53 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
   const [userFilter, setUserFilter] = useState('');
   const [permissionGroupFilter, setPermissionGroupFilter] = useState('');
   const canManageSections = Boolean(currentUser?.isAdmin);
+  const [users, setUsers] = useState([]);
+  const [userDirectoryError, setUserDirectoryError] = useState('');
+  const [isUserDirectoryLoading, setIsUserDirectoryLoading] = useState(false);
+
+  useEffect(() => {
+    if (!canManageSections) {
+      setUsers([]);
+      setUserDirectoryError('');
+      setIsUserDirectoryLoading(false);
+      return undefined;
+    }
+
+    let isCancelled = false;
+
+    const loadUsers = async () => {
+      try {
+        setIsUserDirectoryLoading(true);
+        const loadedUsers = await wikiApi.getWikiUsers();
+        if (isCancelled) return;
+        setUsers(loadedUsers);
+        setUserDirectoryError('');
+      } catch (error) {
+        if (isCancelled) return;
+        setUsers([]);
+        setUserDirectoryError(error.message || 'Failed to load wiki users');
+      } finally {
+        if (!isCancelled) {
+          setIsUserDirectoryLoading(false);
+        }
+      }
+    };
+
+    loadUsers();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [canManageSections]);
+
+  const usersWithGroups = users.map(user => {
+    const memberships = getUserGroups(groups, user.id);
+    return {
+      ...user,
+      groups: memberships,
+      isAdmin: memberships.some(groupName => ADMIN_GROUPS.has(groupName))
+    };
+  });
   const groupOptions = Object.values(groups).sort((left, right) => left.name.localeCompare(right.name));
   const editableGroupOptions = groupOptions.filter(group => group.name.startsWith('wiki_'));
   const filteredGroupOptions = editableGroupOptions.filter(group => group.name.toLowerCase().includes(groupFilter.toLowerCase()));
@@ -831,14 +884,14 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
     .sort((left, right) => left.title.localeCompare(right.title))
     .filter(page => page.title.toLowerCase().includes(pageFilter.toLowerCase()));
   const homeSectionTitle = Object.values(pages || {}).find(page => page.title === 'Home')?.sectionId || null;
-  const filteredUsers = users.filter(user => user.name.toLowerCase().includes(userFilter.toLowerCase()));
+  const filteredUsers = usersWithGroups.filter(user => user.name.toLowerCase().includes(userFilter.toLowerCase()));
   const filteredPermissionGroups = groupOptions.filter(group => group.name.toLowerCase().includes(permissionGroupFilter.toLowerCase()));
-  const adminPermissionMembers = getAdminPermissionMemberNames(groups, users);
+  const adminPermissionMembers = getAdminPermissionMemberNames(groups, usersWithGroups);
   const groupUserNames = Object.fromEntries(
     groupOptions.map(group => [
       group.name,
       (group.memberIds || [])
-        .map(memberId => users.find(user => user.id === memberId)?.name || memberId)
+        .map(memberId => usersWithGroups.find(user => user.id === memberId)?.name || memberId)
         .join(', ')
     ])
   );
@@ -1133,6 +1186,12 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
         </div>
       </div>
 
+      {userDirectoryError && (
+        <div className="wiki-inline-notice" style={{ marginBottom: '1rem' }}>
+          {userDirectoryError}
+        </div>
+      )}
+
       <div className="wiki-admin-field">
         <label className="wiki-admin-label">Group Name</label>
         {editingGroupName === 'new' ? (
@@ -1172,7 +1231,7 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
         options={userChecklistOptions}
         selectedValues={groupMemberIds}
         onToggle={(value) => setGroupMemberIds(toggleSelectedValue(groupMemberIds, value))}
-        emptyResultsLabel="No users match this filter."
+        emptyResultsLabel={isUserDirectoryLoading ? 'Loading users...' : 'No users match this filter.'}
         selectedSummaryLabel="Selected members"
         emptySelectionLabel="No members selected"
         height={220}
@@ -1649,7 +1708,7 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
 
 // --- Main Wiki Component ---
 
-export default function Wiki({ currentUser, users, groups, onIdentityDataChange }) {
+export default function Wiki({ currentUser, groups, onIdentityDataChange }) {
   // State
   const [pages, setPages] = useState([]);
   const [sections, setSections] = useState({});
@@ -1809,7 +1868,6 @@ export default function Wiki({ currentUser, users, groups, onIdentityDataChange 
 
         {viewMode === 'admin' && (
             <AdminPanel
-                users={users}
               groups={groups}
                 sections={sections}
                 pages={pages}

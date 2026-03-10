@@ -39,11 +39,24 @@ function formatGroups(items) {
 function App() {
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState({});
-  const [currentUserId, setCurrentUserId] = useState(() => localStorage.getItem('wiki_user_id') || '');
+  const [currentUserId, setCurrentUserId] = useState(() => localStorage.getItem('wiki_user_id') || 'u3');
   const [isIdentityLoading, setIsIdentityLoading] = useState(true);
   const [identityError, setIdentityError] = useState('');
 
-  const currentUser = users.find(user => user.id === currentUserId) || null;
+  const directoryUsers = buildUsersWithGroups(users, groups);
+  const selectedDirectoryUser = directoryUsers.find(user => user.id === currentUserId) || null;
+  const currentUserGroups = getUserGroups(groups, currentUserId);
+  const currentUser = currentUserId
+    ? {
+        id: currentUserId,
+        name: selectedDirectoryUser?.name || currentUserId,
+        groups: currentUserGroups,
+        isAdmin: currentUserGroups.some(groupName => ADMIN_GROUPS.has(groupName))
+      }
+    : null;
+  const selectableUsers = directoryUsers.length > 0
+    ? directoryUsers
+    : (currentUser ? [currentUser] : []);
 
   const loadIdentityData = useCallback(async (preferredUserId) => {
     try {
@@ -106,9 +119,9 @@ function App() {
             className="app-user-select"
             value={currentUserId}
             onChange={(event) => handleSwitchUser(event.target.value)}
-            disabled={isIdentityLoading || users.length === 0}
+            disabled={isIdentityLoading || selectableUsers.length === 0}
           >
-            {users.map(user => (
+            {selectableUsers.map(user => (
               <option key={user.id} value={user.id}>{user.name}</option>
             ))}
           </select>
@@ -132,7 +145,6 @@ function App() {
         {!isIdentityLoading && currentUser && (
           <Wiki
             currentUser={currentUser}
-            users={users}
             groups={groups}
             onIdentityDataChange={() => loadIdentityData(currentUserId)}
           />
