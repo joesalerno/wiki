@@ -29,21 +29,6 @@ function getAdminPermissionMemberNames(groups, users) {
     .map(user => user.name);
 }
 
-function getUserGroups(groups, userId) {
-  return Object.values(groups || {})
-    .filter(group => (group.memberIds || []).includes(userId))
-    .map(group => group.name);
-}
-
-function normalizeGroups(groups) {
-  return Object.fromEntries(
-    (groups || []).map(group => {
-      const memberIds = (group.users || []).map(user => user.id);
-      return [group.name, { ...group, memberIds }];
-    })
-  );
-}
-
 function hasGroupAccess(groupNames, user) {
   if (user?.isAdmin) return true;
   if (!groupNames || groupNames.length === 0) return true;
@@ -61,17 +46,6 @@ function getPermissionSummaryItems(items) {
   return explicitItems.length > 0
     ? withRequiredAdminPermission(explicitItems)
     : [];
-}
-
-function buildUsersWithGroups(users, groups) {
-  return users.map(user => {
-    const memberships = getUserGroups(groups, user.id);
-    return {
-      ...user,
-      groups: memberships,
-      isAdmin: memberships.some(groupName => ADMIN_GROUPS.has(groupName))
-    };
-  });
 }
 
 function formatList(items) {
@@ -862,9 +836,9 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
   const handleSaveSection = async () => {
     try {
       if (editingSectionId === 'new') {
-        await wikiApi.createWikiSection(sectionFormData);
+        await wikiApi.createWikiSection(sectionFormData, currentUser?.id);
       } else {
-        await wikiApi.updateWikiSection(editingSectionId, sectionFormData);
+        await wikiApi.updateWikiSection(editingSectionId, sectionFormData, currentUser?.id);
       }
 
       onUpdate();
@@ -878,7 +852,7 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
     if (!window.confirm('Are you sure?')) return;
 
     try {
-      await wikiApi.deleteWikiSection(title);
+      await wikiApi.deleteWikiSection(title, currentUser?.id);
       onUpdate();
     } catch (error) {
       alert(error.message);
@@ -890,9 +864,9 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
       const trimmedName = groupFormName.trim();
       const normalizedName = trimmedName.startsWith('wiki_') ? trimmedName : `wiki_${trimmedName.replace(/^wiki_/, '')}`;
       if (editingGroupName === 'new') {
-        await wikiApi.createWikiGroup(normalizedName);
+        await wikiApi.createWikiGroup(normalizedName, currentUser?.id);
       }
-      await wikiApi.updateWikiGroup(normalizedName, groupMemberIds);
+      await wikiApi.updateWikiGroup(normalizedName, groupMemberIds, currentUser?.id);
       onUpdate();
       stopEditing();
     } catch (error) {
@@ -909,7 +883,7 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
     if (!window.confirm(`Delete ${name}?`)) return;
 
     try {
-      await wikiApi.deleteWikiGroup(name);
+      await wikiApi.deleteWikiGroup(name, currentUser?.id);
       onUpdate();
     } catch (error) {
       alert(error.message);
@@ -1265,7 +1239,7 @@ function AdminPanel({ users, groups, sections, pages, onUpdate, onClose, current
   );
 }
 
-function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage, currentUser, users, onSwitchUser, onOpenAdmin, canCreatePage, canManageSections }) {
+function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage, currentUser, onOpenAdmin, canCreatePage, canManageSections }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isNavOpen, setIsNavOpen] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth > 900));
   const [collapsedSections, setCollapsedSections] = useState({});
@@ -1327,7 +1301,7 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
     <aside className="wiki-sidebar">
       <div className="wiki-brand-row">
         <div className="wiki-brand">
-          <span>✨ ReactWiki</span>
+          <span>Navigation</span>
         </div>
         <button
           type="button"
@@ -1341,29 +1315,7 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
       </div>
 
       <div className={`wiki-sidebar-body ${isNavOpen ? 'open' : ''}`}>
-      <div className="user-panel">
-        <label style={{display: 'block', fontSize: '0.8rem', color: '#6b7280', marginBottom: '0.5rem'}}>Signed in as</label>
-        <select
-          className="user-select"
-          value={currentUser?.id || ''}
-          onChange={(e) => {
-            const didSwitch = onSwitchUser(e.target.value);
-            if (didSwitch !== false) closeNavOnMobile();
-          }}
-        >
-          {users.map(u => (
-            <option key={u.id} value={u.id}>{u.name}</option>
-          ))}
-        </select>
-        <div style={{marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-          <span>Role: {currentUser?.isAdmin ? 'Admin' : 'Member'}</span>
-        </div>
-        <div style={{marginTop: '0.25rem', fontSize: '0.75rem', color: '#9ca3af'}}>
-          Groups: {formatList(currentUser?.groups || [])}
-        </div>
-      </div>
-
-      <div className="wiki-nav" style={{marginTop: '2rem'}}>
+      <div className="wiki-nav">
 
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
           <span style={{fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase', color: '#9ca3af', letterSpacing: '0.05em'}}>Pages</span>
@@ -1460,11 +1412,8 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
 
 // --- Main Wiki Component ---
 
-export default function Wiki() {
+export default function Wiki({ currentUser, users, groups, onIdentityDataChange }) {
   // State
-  const [users, setUsers] = useState([]);
-  const [groups, setGroups] = useState({});
-  const [currentUser, setCurrentUser] = useState(null);
   const [pages, setPages] = useState([]);
   const [sections, setSections] = useState({});
   const [currentPageTitle, setCurrentPageTitle] = useState('Home');
@@ -1478,40 +1427,29 @@ export default function Wiki() {
   // Load Initial Data
   useEffect(() => {
     const initData = async () => {
+      if (!currentUser?.id) {
+        setPages([]);
+        setSections({});
+        setCurrentPageData(null);
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
-        const [loadedUsers, loadedGroups, loadedPages, loadedSections] = await Promise.all([
-          wikiApi.getWikiUsers(),
-          wikiApi.getWikiGroups(),
-          wikiApi.getWikiPages(),
+        const [loadedPages, loadedSections] = await Promise.all([
+          wikiApi.getWikiPages(currentUser.id),
           wikiApi.getWikiSections()
         ]);
-
-        const groupMap = normalizeGroups(loadedGroups);
-        const usersWithGroups = buildUsersWithGroups(loadedUsers, groupMap);
         const sectionMap = loadedSections.reduce((acc, section) => {
           acc[section.title] = section;
           return acc;
         }, {});
 
-        let initialUser = currentUser ? usersWithGroups.find(user => user.id === currentUser.id) : null;
-        if (!initialUser) {
-            const storedId = localStorage.getItem('wiki_user_id');
-            if (storedId) initialUser = usersWithGroups.find(u => u.id === storedId);
-        }
-        if (!initialUser) initialUser = usersWithGroups[0] || null;
-
-        if (initialUser) {
-          setCurrentUser(initialUser);
-          localStorage.setItem('wiki_user_id', initialUser.id);
-        }
-
         const nextPageTitle = loadedPages.some(page => page.title === currentPageTitle)
           ? currentPageTitle
           : (loadedPages[0]?.title || null);
 
-        setUsers(usersWithGroups);
-        setGroups(groupMap);
         setPages(loadedPages);
         setSections(sectionMap);
         setCurrentPageTitle(nextPageTitle);
@@ -1523,7 +1461,7 @@ export default function Wiki() {
       }
     };
     initData();
-  }, [tick]); // Reload all data on tick
+  }, [currentUser?.id, tick]); // Reload all data on tick or when active user changes
 
   // Update Current Page Data when dependencies change
   useEffect(() => {
@@ -1537,7 +1475,7 @@ export default function Wiki() {
 
       try {
         if (currentPageTitle) {
-          const page = await wikiApi.getWikiPage(currentPageTitle);
+          const page = await wikiApi.getWikiPage(currentPageTitle, currentUser?.id);
           setCurrentPageData(page);
           setErrorMessage('');
         } else {
@@ -1558,7 +1496,7 @@ export default function Wiki() {
       }
     };
     loadPage();
-  }, [currentPageTitle, pages, tick]);
+  }, [currentPageTitle, currentUser?.id, pages, tick]);
 
   const currentDraftKey = currentUser
     ? (viewMode === 'edit' && currentPageData?.title
@@ -1572,19 +1510,6 @@ export default function Wiki() {
     if (currentDraftKey) {
       localStorage.removeItem(currentDraftKey);
     }
-  };
-
-  const handleSwitchUser = (userId) => {
-    const user = users.find(u => u.id === userId);
-    if (user) {
-        setErrorMessage('');
-        setCurrentUser(user);
-        localStorage.setItem('wiki_user_id', userId);
-        setTick(t => t + 1); // Refresh data with new user permissions
-        return true;
-    }
-
-    return false;
   };
 
   const handleSelectPage = (title) => {
@@ -1626,8 +1551,6 @@ export default function Wiki() {
         onSelectPage={handleSelectPage}
         onCreatePage={handleCreatePage}
         currentUser={currentUser}
-        users={users}
-        onSwitchUser={handleSwitchUser}
         onOpenAdmin={() => {
           if (!canManageSections) {
             return false;
@@ -1654,7 +1577,10 @@ export default function Wiki() {
               groups={groups}
                 sections={sections}
                 pages={pages}
-                onUpdate={() => setTick(t => t + 1)}
+                onUpdate={() => {
+                  setTick(t => t + 1);
+                  onIdentityDataChange?.();
+                }}
             onClose={() => setViewMode('read')}
             currentUser={currentUser}
             />

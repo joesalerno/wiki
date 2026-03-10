@@ -27,21 +27,25 @@
 /* Sidebar */
 .wiki-sidebar {
   width: 260px;
+  max-width: 100%;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   padding: 1.5rem;
   flex-shrink: 0;
+  border-radius: 1rem 0 0 1rem;
 }
 
 .wiki-brand {
-  font-size: 1.25rem;
+  font-size: 0.8rem;
   font-weight: 700;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--primary);
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .wiki-brand-row {
@@ -166,21 +170,6 @@
   font-weight: 500;
 }
 
-.user-panel {
-  padding-top: 1rem;
-  border-top: 1px solid var(--border-color);
-}
-
-.user-select {
-  width: 100%;
-  padding: 0.5rem;
-  border-radius: var(--radius);
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 0.9rem;
-}
-
 .wiki-search-input {
   width: 100%;
   box-sizing: border-box;
@@ -208,6 +197,8 @@
   flex-direction: column;
   overflow: auto;
   position: relative;
+  background: rgba(255, 255, 255, 0.88);
+  border-radius: 0 1rem 1rem 0;
 }
 
 .btn {
@@ -566,6 +557,13 @@
   }
 }
 
+@media (max-width: 900px) {
+  .wiki-sidebar,
+  .wiki-main {
+    border-radius: 0;
+  }
+}
+
 /* Typography for Viewer */
 .wiki-article h1 { font-size: 2.25rem; font-weight: 800; margin: 0; letter-spacing: -0.025em; line-height: 1.1; }
 .wiki-article h2 { font-size: 1.5rem; font-weight: 700; margin-top: 2.5rem; margin-bottom: 1rem; letter-spacing: -0.025em; }
@@ -815,6 +813,7 @@
 @media (max-width: 900px) {
   .wiki-container {
     flex-direction: column;
+    overflow-x: clip;
   }
 
   .wiki-sidebar {

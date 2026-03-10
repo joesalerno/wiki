@@ -20,6 +20,7 @@ const gqlRequest = async (query, variables = {}, userId) => {
 };
 
 const getCurrentWikiUserId = () => localStorage.getItem('wiki_user_id') || 'u3';
+const resolveWikiUserId = (userId) => userId || getCurrentWikiUserId();
 
 const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
@@ -68,8 +69,8 @@ export const wikiApi = {
     return data.wikiSections;
   },
 
-  async createWikiSection(sectionInput) {
-    const userId = getCurrentWikiUserId();
+  async createWikiSection(sectionInput, userId) {
+    const resolvedUserId = resolveWikiUserId(userId);
     const result = await gqlRequest(
       `mutation CreateWikiSection($input: WikiSectionInput!, $userId: ID) {
         createWikiSection(input: $input, userId: $userId) {
@@ -80,13 +81,13 @@ export const wikiApi = {
           reviewRequired
         }
       }`,
-      { input: sectionInput, userId }
+      { input: sectionInput, userId: resolvedUserId }
     );
     return result.createWikiSection;
   },
 
-  async updateWikiSection(title, sectionInput) {
-    const userId = getCurrentWikiUserId();
+  async updateWikiSection(title, sectionInput, userId) {
+    const resolvedUserId = resolveWikiUserId(userId);
     const result = await gqlRequest(
       `mutation UpdateWikiSection($title: String!, $input: WikiSectionInput!, $userId: ID) {
         updateWikiSection(title: $title, input: $input, userId: $userId) {
@@ -97,13 +98,13 @@ export const wikiApi = {
           reviewRequired
         }
       }`,
-      { title, input: sectionInput, userId }
+      { title, input: sectionInput, userId: resolvedUserId }
     );
     return result.updateWikiSection;
   },
 
-  async createWikiGroup(name) {
-    const userId = getCurrentWikiUserId();
+  async createWikiGroup(name, userId) {
+    const resolvedUserId = resolveWikiUserId(userId);
     const result = await gqlRequest(
       `mutation CreateWikiGroup($name: String!, $userId: ID) {
         createWikiGroup(name: $name, userId: $userId) {
@@ -114,13 +115,13 @@ export const wikiApi = {
           }
         }
       }`,
-      { name, userId }
+      { name, userId: resolvedUserId }
     );
     return result.createWikiGroup;
   },
 
-  async updateWikiGroup(name, memberIds) {
-    const userId = getCurrentWikiUserId();
+  async updateWikiGroup(name, memberIds, userId) {
+    const resolvedUserId = resolveWikiUserId(userId);
     const result = await gqlRequest(
       `mutation UpdateWikiGroup($name: String!, $memberIds: [ID!]!, $userId: ID) {
         updateWikiGroup(name: $name, memberIds: $memberIds, userId: $userId) {
@@ -131,35 +132,35 @@ export const wikiApi = {
           }
         }
       }`,
-      { name, memberIds, userId }
+      { name, memberIds, userId: resolvedUserId }
     );
     return result.updateWikiGroup;
   },
 
-  async deleteWikiGroup(name) {
-    const userId = getCurrentWikiUserId();
+  async deleteWikiGroup(name, userId) {
+    const resolvedUserId = resolveWikiUserId(userId);
     const result = await gqlRequest(
       `mutation DeleteWikiGroup($name: String!, $userId: ID) {
         deleteWikiGroup(name: $name, userId: $userId)
       }`,
-      { name, userId }
+      { name, userId: resolvedUserId }
     );
     return result.deleteWikiGroup;
   },
 
-  async deleteWikiSection(title) {
-    const userId = getCurrentWikiUserId();
+  async deleteWikiSection(title, userId) {
+    const resolvedUserId = resolveWikiUserId(userId);
     const result = await gqlRequest(
       `mutation DeleteWikiSection($title: String!, $userId: ID) {
         deleteWikiSection(title: $title, userId: $userId)
       }`,
-      { title, userId }
+      { title, userId: resolvedUserId }
     );
     return result.deleteWikiSection;
   },
 
-  async getWikiPages() {
-    const userId = getCurrentWikiUserId();
+  async getWikiPages(userId) {
+    const resolvedUserId = resolveWikiUserId(userId);
     const data = await gqlRequest(
       `query GetWikiPages($userId: ID) {
         wikiPages(userId: $userId) {
@@ -169,14 +170,14 @@ export const wikiApi = {
           authorId
         }
       }`,
-      { userId },
-      userId
+      { userId: resolvedUserId },
+      resolvedUserId
     );
     return data.wikiPages;
   },
 
-  async getWikiPage(title) {
-    const userId = getCurrentWikiUserId();
+  async getWikiPage(title, userId) {
+    const resolvedUserId = resolveWikiUserId(userId);
     const data = await gqlRequest(
       `query GetWikiPage($title: ID!, $userId: ID) {
         wikiPage(title: $title, userId: $userId) {
@@ -207,8 +208,8 @@ export const wikiApi = {
           }
         }
       }`,
-      { title, userId },
-      userId
+      { title, userId: resolvedUserId },
+      resolvedUserId
     );
     return data.wikiPage;
   },
