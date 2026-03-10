@@ -241,6 +241,9 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
                            (() => {
                              const targetSectionId = rev.sectionId || currentSectionId;
                              const sectionChanged = targetSectionId !== currentSectionId;
+                             const isOwnRevision = currentUser?.id === rev.authorId;
+                             const canApproveOwnRevision = isOwnRevision && currentUser?.isAdmin;
+                             const approveDisabled = isOwnRevision && !currentUser?.isAdmin;
 
                              return (
                            <li key={idx} style={{backgroundColor: 'white', padding: '0.5rem', marginBottom: '0.5rem', borderRadius: '0.25rem', border: '1px solid #e5e7eb'}}>
@@ -252,19 +255,24 @@ function PageViewer({ page, onEdit, onHistory, canEdit, pendingRevisions, onAppr
                                            Section change: <strong>{currentSectionId}</strong> to <strong>{targetSectionId}</strong>
                                          </div>
                                        )}
+                                       {canApproveOwnRevision && (
+                                         <div style={{marginTop: '0.35rem', fontSize: '0.8rem', color: '#92400e'}}>
+                                           Warning: you are approving your own revision.
+                                         </div>
+                                       )}
                                    </div>
                                    <div>
                                        <button
                                           className="btn btn-sm btn-primary"
                                           style={{
                                               marginRight: '0.5rem',
-                                              backgroundColor: currentUser?.id === rev.authorId ? '#9ca3af' : '#10b981',
-                                              borderColor: currentUser?.id === rev.authorId ? '#9ca3af' : '#059669',
-                                              cursor: currentUser?.id === rev.authorId ? 'not-allowed' : 'pointer'
+                                              backgroundColor: approveDisabled ? '#9ca3af' : '#10b981',
+                                              borderColor: approveDisabled ? '#9ca3af' : '#059669',
+                                              cursor: approveDisabled ? 'not-allowed' : 'pointer'
                                           }}
-                                          onClick={() => onApprove(idx)}
-                                          disabled={currentUser?.id === rev.authorId}
-                                          title={currentUser?.id === rev.authorId ? "Cannot approve own changes" : "Approve"}
+                                          onClick={() => onApprove(idx, rev)}
+                                          disabled={approveDisabled}
+                                          title={approveDisabled ? "Cannot approve your own changes unless you are an admin" : canApproveOwnRevision ? "Approve your own revision" : "Approve"}
                                        >
                                            Approve
                                        </button>
@@ -1828,8 +1836,13 @@ export default function Wiki({ currentUser, users, groups, onIdentityDataChange 
               )
             )}
             currentUser={currentUser}
-            onApprove={async (index) => {
-               if(window.confirm("Approve this revision?")) {
+            onApprove={async (index, revision) => {
+              const isOwnRevision = revision?.authorId === currentUser?.id;
+              const confirmationMessage = isOwnRevision
+                ? 'Warning: you are approving your own revision. Continue?'
+                : 'Approve this revision?';
+
+              if(window.confirm(confirmationMessage)) {
                   try {
                   await wikiApi.approveWikiRevision(currentPageData.title, index, currentUser.id);
                       setTick(t => t + 1);

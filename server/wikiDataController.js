@@ -705,7 +705,7 @@ export const wikiDataController = {
     if (!section || !hasGroupPermission(data, approverGroups, userId)) {
       throw new Error('Permission denied');
     }
-    if (userId === pendingRevision.authorId) {
+    if (userId === pendingRevision.authorId && !isAdminUser(data, userId)) {
       throw new Error('Cannot approve your own changes');
     }
 
