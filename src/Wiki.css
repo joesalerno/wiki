@@ -32,7 +32,7 @@
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  padding: 1.5rem;
+  padding: 0.5rem;
   flex-shrink: 0;
   border-radius: 1rem 0 0 1rem;
 }
@@ -174,7 +174,6 @@
   width: 100%;
   box-sizing: border-box;
   padding: 0.5rem 0.5rem;
-  margin-bottom: 1rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   background: var(--bg-primary);
@@ -818,7 +817,7 @@
 
   .wiki-sidebar {
     width: 100%;
-    padding: 1rem;
+    padding: 0.5rem;
     border-right: none;
     border-bottom: 1px solid var(--border-color);
   }

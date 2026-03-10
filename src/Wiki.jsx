@@ -1329,7 +1329,7 @@ function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage
                 }}
                 title="Manage Sections"
               >
-                Sections
+                Manage
               </button>
             )}
             <button
