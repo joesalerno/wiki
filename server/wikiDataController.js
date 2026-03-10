@@ -7,13 +7,13 @@ const DB_PATH = path.join(__dirname, 'wiki.json');
 const ADMIN_GROUPS = new Set(['admin', 'wiki_admin']);
 const ADMIN_PERMISSION_GROUP = 'wiki_admin';
 const PAGE_REVIEW_MODES = new Set(['inherit', 'required', 'exempt']);
+const IDENTITY_USERS = [
+  { id: 'u1', name: 'Alice (Admin)' },
+  { id: 'u2', name: 'Bob (Editor)' },
+  { id: 'u3', name: 'Charlie (Viewer)' }
+];
 
 const SEED_DATA = {
-  users: [
-    { id: 'u1', name: 'Alice (Admin)' },
-    { id: 'u2', name: 'Bob (Editor)' },
-    { id: 'u3', name: 'Charlie (Viewer)' }
-  ],
   groups: {
     admin: {
       name: 'admin',
@@ -269,11 +269,11 @@ function normalizePages(rawPages, sectionIdToTitle, sectionTitles) {
 }
 
 function normalizeData(rawData) {
-  const users = normalizeUsers(rawData?.users);
+  const users = normalizeUsers(IDENTITY_USERS);
   const validUserIds = new Set(users.map(user => user.id));
   const groups = normalizeGroups(rawData?.groups, validUserIds);
 
-  (Array.isArray(rawData?.users) ? rawData.users : []).forEach(user => {
+  users.forEach(user => {
     (user?.groups || []).forEach(groupName => ensureGroup(groups, groupName, [user.id]));
     if (user?.isAdmin) ensureGroup(groups, 'admin', [user.id]);
   });
@@ -309,7 +309,13 @@ async function loadData() {
 }
 
 async function saveData(data) {
-  await fs.writeFile(DB_PATH, JSON.stringify(data, null, 2));
+  const persistedData = {
+    groups: data.groups,
+    sections: data.sections,
+    pages: data.pages
+  };
+
+  await fs.writeFile(DB_PATH, JSON.stringify(persistedData, null, 2));
 }
 
 function getUserById(data, userId) {

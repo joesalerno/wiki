@@ -1,31 +1,12 @@
 {
-  "users": [
-    {
-      "id": "u1",
-      "name": "Alice (Admin)"
-    },
-    {
-      "id": "u2",
-      "name": "Bob (Editor)"
-    },
-    {
-      "id": "u3",
-      "name": "Charlie (Viewer)"
-    }
-  ],
   "groups": {
     "admin": {
       "name": "admin",
-      "memberIds": [
-        "u1"
-      ]
+      "memberIds": []
     },
     "wiki_editors": {
       "name": "wiki_editors",
-      "memberIds": [
-        "u1",
-        "u2"
-      ]
+      "memberIds": []
     }
   },
   "sections": {
