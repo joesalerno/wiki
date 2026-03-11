@@ -6,125 +6,56 @@ import './Wiki.css'
 const ADMIN_GROUPS = new Set(['admin', 'wiki_admin'])
 const ADMIN_PERMISSION_GROUP = 'wiki_admin'
 
-const dedupeItems = (values) => [...new Set((values || []).filter(Boolean))]
+const dedupeItems = values => [...new Set((values || []).filter(Boolean))]
 
 const getUserGroups = (groups, userId) => Object.values(groups || {})
-  .filter(group => (group.memberIds || []).includes(userId))
-  .map(group => group.name)
+  .filter(g => (g.memberIds || []).includes(userId))
+  .map(g => g.name)
 
-const normalizeGroupMap = (groups) => Object.fromEntries(
-  (groups || []).map(group => {
-    const memberIds = (group.users || []).map(user => user.id)
-    return [group.name, { ...group, memberIds }]
-  })
+const normalizeGroupMap = groups => Object.fromEntries(
+  (groups || []).map(g => [g.name, { ...g, memberIds: (g.users || []).map(u => u.id) }])
 )
 
-function buildUsersWithMemberships(users, groups) {
-  return (users || []).map(user => {
-    const memberships = getUserGroups(groups, user.id)
-    return {
-      ...user,
-      groups: memberships,
-      isAdmin: memberships.some(groupName => ADMIN_GROUPS.has(groupName))
-    }
-  })
-}
+const buildUsersWithMemberships = (users, groups) => (users || []).map(u => {
+  const m = getUserGroups(groups, u.id)
+  return { ...u, groups: m, isAdmin: m.some(g => ADMIN_GROUPS.has(g)) }
+})
 
-function withRequiredAdminPermission(groups) {
-  return dedupeItems([
-    ADMIN_PERMISSION_GROUP,
-    ...(groups || []).map(groupName => ADMIN_GROUPS.has(groupName) ? ADMIN_PERMISSION_GROUP : groupName)
-  ])
-}
+const withRequiredAdminPermission = groups => dedupeItems([
+  ADMIN_PERMISSION_GROUP,
+  ...(groups || []).map(g => ADMIN_GROUPS.has(g) ? ADMIN_PERMISSION_GROUP : g)
+])
 
-function getAdminPermissionMemberNames(groups, users) {
+const getAdminPermissionMemberNames = (groups, users) => {
   const memberIds = new Set(
-    Object.values(groups || {})
-      .filter(group => ADMIN_GROUPS.has(group.name))
-      .flatMap(group => group.memberIds || [])
+    Object.values(groups || {}).filter(g => ADMIN_GROUPS.has(g.name)).flatMap(g => g.memberIds || [])
   )
-  return users
-    .filter(user => memberIds.has(user.id))
-    .map(user => user.name)
+  return users.filter(u => memberIds.has(u.id)).map(u => u.name)
 }
 
-function hasGroupAccess(groupNames, user) {
-  if (user?.isAdmin) return true
-  if (!groupNames || groupNames.length === 0) return true
-  if (!user) return false
-  const userGroups = new Set(user.groups || [])
-  return (groupNames || []).some(groupName => userGroups.has(groupName))
+const hasGroupAccess = (groupNames, user) => user?.isAdmin || !groupNames?.length || !!(user && groupNames.some(g => new Set(user.groups || []).has(g)))
+
+const stripAdminPermission = items => (items || []).filter(i => !ADMIN_GROUPS.has(i))
+
+const getPermissionSummaryItems = items => {
+  const explicit = stripAdminPermission(items)
+  return explicit.length ? withRequiredAdminPermission(explicit) : []
 }
 
-function stripAdminPermission(items) {
-  return (items || []).filter(item => !ADMIN_GROUPS.has(item))
-}
+const formatList = items => items?.length ? items.join(', ') : 'None'
+const formatReadGroups = items => stripAdminPermission(items).join(', ') || 'Anyone'
+const formatWriteGroups = formatReadGroups
+const formatApproverGroups = items => stripAdminPermission(items).join(', ') || ((items || []).includes(ADMIN_PERMISSION_GROUP) ? 'Admins' : 'Anyone')
 
-function getPermissionSummaryItems(items) {
-  const explicitItems = stripAdminPermission(items)
-  return explicitItems.length > 0
-    ? withRequiredAdminPermission(explicitItems)
-    : []
-}
+const isPageReviewRequired = (page, section) => page?.reviewMode === 'required' || (page?.reviewMode !== 'exempt' && !!section?.reviewRequired)
 
-function formatList(items) {
-  return items && items.length > 0 ? items.join(', ') : 'None'
-}
+const getPageApproverGroups = (page, section) => isPageReviewRequired(page, section) ? (section?.approverGroups?.length ? section.approverGroups : [ADMIN_PERMISSION_GROUP]) : []
 
-function formatReadGroups(items) {
-  const visibleItems = stripAdminPermission(items)
-  return visibleItems.length > 0 ? visibleItems.join(', ') : 'Anyone'
-}
+const canApprovePageReview = (page, section, user) => getPageApproverGroups(page, section).length > 0 && hasGroupAccess(getPageApproverGroups(page, section), user)
 
-function formatWriteGroups(items) {
-  const visibleItems = stripAdminPermission(items)
-  return visibleItems.length > 0 ? visibleItems.join(', ') : 'Anyone'
-}
+const formatPageReviewMode = m => m === 'required' ? 'Required' : m === 'exempt' ? 'Exempt' : 'Inherit'
 
-function formatApproverGroups(items) {
-  const visibleItems = stripAdminPermission(items)
-  if (visibleItems.length === 0 && (items || []).includes(ADMIN_PERMISSION_GROUP)) {
-    return 'Admins'
-  }
-  return visibleItems.length > 0 ? visibleItems.join(', ') : 'Anyone'
-}
-
-function isPageReviewRequired(page, section) {
-  if (page?.reviewMode === 'required') return true
-  if (page?.reviewMode === 'exempt') return false
-  return Boolean(section?.reviewRequired)
-}
-
-function getPageApproverGroups(page, section) {
-  if (!isPageReviewRequired(page, section)) {
-    return []
-  }
-
-  const approverGroups = section?.approverGroups || []
-  return approverGroups.length > 0 ? approverGroups : [ADMIN_PERMISSION_GROUP]
-}
-
-function canApprovePageReview(page, section, user) {
-  const approverGroups = getPageApproverGroups(page, section)
-  if (approverGroups.length === 0) {
-    return false
-  }
-  return hasGroupAccess(approverGroups, user)
-}
-
-function formatPageReviewMode(reviewMode) {
-  if (reviewMode === 'required') return 'Required'
-  if (reviewMode === 'exempt') return 'Exempt'
-  return 'Inherit'
-}
-
-function getReviewIndicatorClassName(pendingReviewCount, extraClassName = '') {
-  return [
-    'wiki-review-indicator',
-    pendingReviewCount > 0 ? 'is-pending' : 'is-clear',
-    extraClassName
-  ].filter(Boolean).join(' ')
-}
+const getReviewIndicatorClassName = (count, extra = '') => `wiki-review-indicator ${count > 0 ? 'is-pending' : 'is-clear'} ${extra}`.trim()
 
 function formatReviewIndicatorTitle(page) {
   if ((page?.pendingReviewCount || 0) > 0) {
@@ -172,8 +103,8 @@ function toggleSelectedValue(values, value) {
 
 async function getManagementData() {
   const [loadedUsers, loadedGroups] = await Promise.all([
-    wikiApi.getWikiUsers(),
-    wikiApi.getWikiGroups()
+    wikiApi.getUsers(),
+    wikiApi.getGroups()
   ])
 
   return {
@@ -1017,9 +948,9 @@ function AdminPanel({ sections, pages, onUpdate, onClose, currentUser }) {
       const trimmedName = groupFormName.trim()
       const normalizedName = trimmedName.startsWith('wiki_') ? trimmedName : `wiki_${trimmedName.replace(/^wiki_/, '')}`
       if (editingGroupName === 'new') {
-        await wikiApi.createWikiGroup(normalizedName, currentUser?.id)
+        await wikiApi.createGroup(normalizedName, currentUser?.id)
       }
-      await wikiApi.updateWikiGroup(normalizedName, groupMemberIds, currentUser?.id)
+      await wikiApi.updateGroup(normalizedName, groupMemberIds, currentUser?.id)
       await loadManagementData()
       onUpdate()
       stopEditing()
@@ -1035,7 +966,7 @@ function AdminPanel({ sections, pages, onUpdate, onClose, currentUser }) {
     }
     if (!window.confirm(`Delete ${name}?`)) return
     try {
-      await wikiApi.deleteWikiGroup(name, currentUser?.id)
+      await wikiApi.deleteGroup(name, currentUser?.id)
       await loadManagementData()
       onUpdate()
     } catch (error) {

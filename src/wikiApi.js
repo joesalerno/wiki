@@ -1,5 +1,4 @@
 const API_URL = 'http://localhost:3001/graphql';
-const ASSET_URL = 'http://localhost:3001/wiki-assets';
 
 const gqlRequest = async (query, variables = {}, userId) => {
   const res = await fetch(API_URL, {
@@ -30,16 +29,16 @@ const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
 });
 
 export const wikiApi = {
-  async getWikiUsers() {
+  async getUsers() {
     const data = await gqlRequest(
-      `query GetWikiUsers {
-        wikiUsers { id name }
+      `query GetUsers {
+        users { id name }
       }`
     );
-    return data.wikiUsers;
+    return data.users;
   },
 
-  async getWikiGroups() {
+  async getGroups() {
     const data = await gqlRequest(
       `query GetGroups {
         groups {
@@ -103,11 +102,11 @@ export const wikiApi = {
     return result.updateWikiSection;
   },
 
-  async createWikiGroup(name, userId) {
+  async createGroup(name, userId) {
     const resolvedUserId = resolveWikiUserId(userId);
     const result = await gqlRequest(
-      `mutation CreateWikiGroup($name: String!, $userId: ID) {
-        createWikiGroup(name: $name, userId: $userId) {
+      `mutation CreateGroup($name: String!, $userId: ID) {
+        createGroup(name: $name, userId: $userId) {
           name
           users {
             id
@@ -117,14 +116,14 @@ export const wikiApi = {
       }`,
       { name, userId: resolvedUserId }
     );
-    return result.createWikiGroup;
+    return result.createGroup;
   },
 
-  async updateWikiGroup(name, memberIds, userId) {
+  async updateGroup(name, memberIds, userId) {
     const resolvedUserId = resolveWikiUserId(userId);
     const result = await gqlRequest(
-      `mutation UpdateWikiGroup($name: String!, $memberIds: [ID!]!, $userId: ID) {
-        updateWikiGroup(name: $name, memberIds: $memberIds, userId: $userId) {
+      `mutation UpdateGroup($name: String!, $memberIds: [ID!]!, $userId: ID) {
+        updateGroup(name: $name, memberIds: $memberIds, userId: $userId) {
           name
           users {
             id
@@ -134,18 +133,18 @@ export const wikiApi = {
       }`,
       { name, memberIds, userId: resolvedUserId }
     );
-    return result.updateWikiGroup;
+    return result.updateGroup;
   },
 
-  async deleteWikiGroup(name, userId) {
+  async deleteGroup(name, userId) {
     const resolvedUserId = resolveWikiUserId(userId);
     const result = await gqlRequest(
-      `mutation DeleteWikiGroup($name: String!, $userId: ID) {
-        deleteWikiGroup(name: $name, userId: $userId)
+      `mutation DeleteGroup($name: String!, $userId: ID) {
+        deleteGroup(name: $name, userId: $userId)
       }`,
       { name, userId: resolvedUserId }
     );
-    return result.deleteWikiGroup;
+    return result.deleteGroup;
   },
 
   async deleteWikiSection(title, userId) {
@@ -407,24 +406,19 @@ export const wikiApi = {
     const mimeMatch = meta?.match(/^data:(.*);base64$/);
     const mimeType = mimeMatch?.[1] || file.type || 'application/octet-stream';
 
-    const response = await fetch(ASSET_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-ID': getCurrentWikiUserId()
-      },
-      body: JSON.stringify({
-        fileName: file.name,
-        mimeType,
-        contentBase64
-      })
-    });
-
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error || 'Failed to upload asset');
-    }
-
-    return payload;
+    const data = await gqlRequest(
+      `mutation UploadAsset($fileName: String!, $contentBase64: String!, $mimeType: String!) {
+        uploadAsset(fileName: $fileName, contentBase64: $contentBase64, mimeType: $mimeType) {
+          fileName
+          mimeType
+          isImage
+          url
+          markdown
+        }
+      }`,
+      { fileName: file.name, contentBase64, mimeType },
+      getCurrentWikiUserId()
+    );
+    return data.uploadAsset;
   }
 };
