@@ -111,9 +111,9 @@ const typeDefs = `#graphql
   }
 
   type Mutation {
-    createGroup(name: String!, userId: ID): Group!
-    updateGroup(name: String!, memberIds: [ID!]!, userId: ID): Group!
-    deleteGroup(name: String!, userId: ID): Boolean!
+    createWikiGroup(name: String!, userId: ID): Group!
+    updateWikiGroup(name: String!, memberIds: [ID!]!, userId: ID): Group!
+    deleteWikiGroup(name: String!, userId: ID): Boolean!
     createWikiSection(input: WikiSectionInput!, userId: ID): WikiSection!
     updateWikiSection(title: String!, input: WikiSectionInput!, userId: ID): WikiSection!
     deleteWikiSection(title: String!, userId: ID): Boolean!
@@ -144,10 +144,10 @@ const resolvers = {
     wikiPageHistory: (_, args) => wikiDataController.getWikiPageHistory(args.title)
   },
   Mutation: {
-    createGroup: (_, args, context) => wikiDataController.createGroup(args.name, resolveUserId(args, context)),
-    updateGroup: (_, args, context) => wikiDataController.updateGroup(args.name, args.memberIds, resolveUserId(args, context)),
-    deleteGroup: async (_, args, context) => {
-      await wikiDataController.deleteGroup(args.name, resolveUserId(args, context));
+    createWikiGroup: (_, args, context) => wikiDataController.createWikiGroup(args.name, resolveUserId(args, context)),
+    updateWikiGroup: (_, args, context) => wikiDataController.updateWikiGroup(args.name, args.memberIds, resolveUserId(args, context)),
+    deleteWikiGroup: async (_, args, context) => {
+      await wikiDataController.deleteWikiGroup(args.name, resolveUserId(args, context));
       return true;
     },
     createWikiSection: (_, args, context) => wikiDataController.createWikiSection(args.input?.title, args.input, resolveUserId(args, context)),

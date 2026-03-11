@@ -102,11 +102,11 @@ export const wikiApi = {
     return result.updateWikiSection;
   },
 
-  async createGroup(name, userId) {
+  async createWikiGroup(name, userId) {
     const resolvedUserId = resolveWikiUserId(userId);
     const result = await gqlRequest(
-      `mutation CreateGroup($name: String!, $userId: ID) {
-        createGroup(name: $name, userId: $userId) {
+      `mutation CreateWikiGroup($name: String!, $userId: ID) {
+        createWikiGroup(name: $name, userId: $userId) {
           name
           users {
             id
@@ -116,14 +116,14 @@ export const wikiApi = {
       }`,
       { name, userId: resolvedUserId }
     );
-    return result.createGroup;
+    return result.createWikiGroup;
   },
 
-  async updateGroup(name, memberIds, userId) {
+  async updateWikiGroup(name, memberIds, userId) {
     const resolvedUserId = resolveWikiUserId(userId);
     const result = await gqlRequest(
-      `mutation UpdateGroup($name: String!, $memberIds: [ID!]!, $userId: ID) {
-        updateGroup(name: $name, memberIds: $memberIds, userId: $userId) {
+      `mutation UpdateWikiGroup($name: String!, $memberIds: [ID!]!, $userId: ID) {
+        updateWikiGroup(name: $name, memberIds: $memberIds, userId: $userId) {
           name
           users {
             id
@@ -133,18 +133,18 @@ export const wikiApi = {
       }`,
       { name, memberIds, userId: resolvedUserId }
     );
-    return result.updateGroup;
+    return result.updateWikiGroup;
   },
 
-  async deleteGroup(name, userId) {
+  async deleteWikiGroup(name, userId) {
     const resolvedUserId = resolveWikiUserId(userId);
     const result = await gqlRequest(
-      `mutation DeleteGroup($name: String!, $userId: ID) {
-        deleteGroup(name: $name, userId: $userId)
+      `mutation DeleteWikiGroup($name: String!, $userId: ID) {
+        deleteWikiGroup(name: $name, userId: $userId)
       }`,
       { name, userId: resolvedUserId }
     );
-    return result.deleteGroup;
+    return result.deleteWikiGroup;
   },
 
   async deleteWikiSection(title, userId) {

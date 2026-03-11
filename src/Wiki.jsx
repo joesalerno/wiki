@@ -948,9 +948,9 @@ function AdminPanel({ sections, pages, onUpdate, onClose, currentUser }) {
       const trimmedName = groupFormName.trim()
       const normalizedName = trimmedName.startsWith('wiki_') ? trimmedName : `wiki_${trimmedName.replace(/^wiki_/, '')}`
       if (editingGroupName === 'new') {
-        await wikiApi.createGroup(normalizedName, currentUser?.id)
+        await wikiApi.createWikiGroup(normalizedName, currentUser?.id)
       }
-      await wikiApi.updateGroup(normalizedName, groupMemberIds, currentUser?.id)
+      await wikiApi.updateWikiGroup(normalizedName, groupMemberIds, currentUser?.id)
       await loadManagementData()
       onUpdate()
       stopEditing()
@@ -966,7 +966,7 @@ function AdminPanel({ sections, pages, onUpdate, onClose, currentUser }) {
     }
     if (!window.confirm(`Delete ${name}?`)) return
     try {
-      await wikiApi.deleteGroup(name, currentUser?.id)
+      await wikiApi.deleteWikiGroup(name, currentUser?.id)
       await loadManagementData()
       onUpdate()
     } catch (error) {
