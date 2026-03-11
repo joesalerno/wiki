@@ -29,58 +29,19 @@ function sanitizeFileName(fileName) {
 }
 
 function buildAssetUrl(req, fileName) {
+  if (!req) return `/uploads/${encodeURIComponent(fileName)}`;
   return `${req.protocol}://${req.get('host')}/uploads/${encodeURIComponent(fileName)}`;
 }
 
-app.post('/wiki-assets', async (req, res) => {
-  try {
-    const { fileName, contentBase64, mimeType } = req.body || {};
-
-    if (!fileName || !contentBase64 || !mimeType) {
-      return res.status(400).json({ error: 'fileName, contentBase64, and mimeType are required' });
-    }
-
-    const buffer = Buffer.from(contentBase64, 'base64');
-    if (!buffer.length) {
-      return res.status(400).json({ error: 'Uploaded file is empty' });
-    }
-
-    if (buffer.length > MAX_UPLOAD_BYTES) {
-      return res.status(413).json({ error: 'File too large. Maximum size is 10 MB.' });
-    }
-
-    await fs.mkdir(UPLOAD_DIR, { recursive: true });
-
-    const safeFileName = sanitizeFileName(fileName);
-    const stampedFileName = `${Date.now()}-${safeFileName}`;
-    const filePath = path.join(UPLOAD_DIR, stampedFileName);
-
-    await fs.writeFile(filePath, buffer);
-
-    const url = buildAssetUrl(req, stampedFileName);
-    const isImage = mimeType.startsWith('image/');
-
-    return res.status(201).json({
-      fileName: stampedFileName,
-      mimeType,
-      isImage,
-      url,
-      markdown: isImage ? `![${safeFileName}](${url})` : `[${safeFileName}](${url})`
-    });
-  } catch (error) {
-    return res.status(500).json({ error: error.message || 'Failed to upload asset' });
-  }
-});
-
 const typeDefs = `#graphql
-  type WikiUser {
+  type User {
     id: ID!
     name: String!
   }
 
-  type WikiGroup {
+  type Group {
     name: String!
-    users: [WikiUser!]!
+    users: [User!]!
   }
 
   type WikiSection {
@@ -137,10 +98,17 @@ const typeDefs = `#graphql
     reviewRequired: Boolean!
   }
 
+  type AssetUploadResult {
+    fileName: String!
+    mimeType: String!
+    isImage: Boolean!
+    url: String!
+    markdown: String!
+  }
+
   type Query {
-    wikiUsers: [WikiUser!]!
-    groups: [WikiGroup!]!
-    wikiGroups: [WikiGroup!]!
+    users: [User!]!
+    groups: [Group!]!
     wikiSections: [WikiSection!]!
     wikiPages(userId: ID): [WikiPageSummary!]!
     wikiPage(title: ID!, userId: ID): WikiPage
@@ -148,8 +116,12 @@ const typeDefs = `#graphql
   }
 
   type Mutation {
-    createWikiGroup(name: String!, userId: ID): WikiGroup!
-    updateWikiGroup(name: String!, memberIds: [ID!]!, userId: ID): WikiGroup!
+    uploadAsset(fileName: String!, contentBase64: String!, mimeType: String!): AssetUploadResult!
+    createGroup(name: String!, userId: ID): Group!
+    updateGroup(name: String!, memberIds: [ID!]!, userId: ID): Group!
+    deleteGroup(name: String!, userId: ID): Boolean!
+    createWikiGroup(name: String!, userId: ID): Group!
+    updateWikiGroup(name: String!, memberIds: [ID!]!, userId: ID): Group!
     deleteWikiGroup(name: String!, userId: ID): Boolean!
     createWikiSection(input: WikiSectionInput!, userId: ID): WikiSection!
     updateWikiSection(title: String!, input: WikiSectionInput!, userId: ID): WikiSection!
@@ -165,22 +137,60 @@ const typeDefs = `#graphql
 const resolveUserId = (args, context) => args.userId || context.userId || null;
 
 const resolvers = {
-  WikiGroup: {
+  Group: {
     users: async (group) => {
-      const users = await Promise.all((group.memberIds || []).map(userId => wikiDataController.getWikiUserById(userId)));
+      const users = await Promise.all((group.memberIds || []).map(userId => wikiDataController.getUserById(userId)));
       return users.filter(Boolean);
     }
   },
   Query: {
-    wikiUsers: () => wikiDataController.getWikiUsers(),
-    groups: () => wikiDataController.getWikiGroups(),
-    wikiGroups: () => wikiDataController.getWikiGroups(),
+    users: () => wikiDataController.getUsers(),
+    groups: () => wikiDataController.getGroups(),
     wikiSections: () => wikiDataController.getWikiSections(),
     wikiPages: (_, args, context) => wikiDataController.getWikiPages(resolveUserId(args, context)),
     wikiPage: (_, args, context) => wikiDataController.getWikiPage(args.title, resolveUserId(args, context)),
     wikiPageHistory: (_, args) => wikiDataController.getWikiPageHistory(args.title)
   },
   Mutation: {
+    uploadAsset: async (_, { fileName, contentBase64, mimeType }, context) => {
+      if (!fileName || !contentBase64 || !mimeType) {
+        throw new Error('fileName, contentBase64, and mimeType are required');
+      }
+
+      const buffer = Buffer.from(contentBase64, 'base64');
+      if (!buffer.length) {
+        throw new Error('Uploaded file is empty');
+      }
+
+      if (buffer.length > MAX_UPLOAD_BYTES) {
+        throw new Error('File too large. Maximum size is 10 MB.');
+      }
+
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+
+      const safeFileName = sanitizeFileName(fileName);
+      const stampedFileName = `${Date.now()}-${safeFileName}`;
+      const filePath = path.join(UPLOAD_DIR, stampedFileName);
+
+      await fs.writeFile(filePath, buffer);
+
+      const url = buildAssetUrl(context.req, stampedFileName);
+      const isImage = mimeType.startsWith('image/');
+
+      return {
+        fileName: stampedFileName,
+        mimeType,
+        isImage,
+        url,
+        markdown: isImage ? `![${safeFileName}](${url})` : `[${safeFileName}](${url})`
+      };
+    },
+    createGroup: (_, args, context) => wikiDataController.createGroup(args.name, resolveUserId(args, context)),
+    updateGroup: (_, args, context) => wikiDataController.updateGroup(args.name, args.memberIds, resolveUserId(args, context)),
+    deleteGroup: async (_, args, context) => {
+      await wikiDataController.deleteGroup(args.name, resolveUserId(args, context));
+      return true;
+    },
     createWikiGroup: (_, args, context) => wikiDataController.createWikiGroup(args.name, resolveUserId(args, context)),
     updateWikiGroup: (_, args, context) => wikiDataController.updateWikiGroup(args.name, args.memberIds, resolveUserId(args, context)),
     deleteWikiGroup: async (_, args, context) => {
@@ -206,7 +216,8 @@ await server.start();
 
 app.use('/graphql', expressMiddleware(server, {
   context: async ({ req }) => ({
-    userId: req.headers['x-user-id']?.toString()
+    userId: req.headers['x-user-id']?.toString(),
+    req
   })
 }));
 

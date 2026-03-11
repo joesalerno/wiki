@@ -172,8 +172,8 @@ function toggleSelectedValue(values, value) {
 
 async function getManagementData() {
   const [loadedUsers, loadedGroups] = await Promise.all([
-    wikiApi.getWikiUsers(),
-    wikiApi.getWikiGroups()
+    wikiApi.getUsers(),
+    wikiApi.getGroups()
   ])
 
   return {
