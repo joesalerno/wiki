@@ -393,16 +393,16 @@ function sanitizeMemberIds(memberIds, data) {
 }
 
 export const wikiDataController = {
-  getWikiUserById(userId) {
+  getUserById(userId) {
     return loadData().then(data => getUserById(data, userId));
   },
 
-  async getWikiUsers() {
+  async getUsers() {
     const data = await loadData();
     return [...data.users].sort((left, right) => left.name.localeCompare(right.name));
   },
 
-  async getWikiGroups() {
+  async getGroups() {
     const data = await loadData();
     return Object.values(data.groups).sort((left, right) => left.name.localeCompare(right.name));
   },
@@ -410,6 +410,62 @@ export const wikiDataController = {
   async getWikiSections() {
     const data = await loadData();
     return Object.values(data.sections).sort((left, right) => left.title.localeCompare(right.title));
+  },
+
+  async createGroup(name, userId) {
+    const data = await loadData();
+    await checkAdmin(userId, data);
+
+    const normalizedName = normalizeGroupName(name);
+    if (!normalizedName) throw new Error('Group name is required');
+    if (data.groups[normalizedName]) throw new Error('Group already exists');
+
+    data.groups[normalizedName] = {
+      name: normalizedName,
+      memberIds: []
+    };
+
+    await saveData(data);
+    return data.groups[normalizedName];
+  },
+
+  async updateGroup(name, memberIds, userId) {
+    const data = await loadData();
+    await checkAdmin(userId, data);
+
+    const normalizedName = normalizeGroupName(name);
+    if (!normalizedName) throw new Error('Group name is required');
+    if (!data.groups[normalizedName]) throw new Error('Group not found');
+
+    data.groups[normalizedName] = {
+      name: normalizedName,
+      memberIds: sanitizeMemberIds(memberIds || [], data)
+    };
+
+    await saveData(data);
+    return data.groups[normalizedName];
+  },
+
+  async deleteGroup(name, userId) {
+    const data = await loadData();
+    await checkAdmin(userId, data);
+
+    const normalizedName = normalizeGroupName(name);
+    if (!normalizedName) throw new Error('Group name is required');
+    if (!data.groups[normalizedName]) throw new Error('Group not found');
+    if (normalizedName === ADMIN_PERMISSION_GROUP) {
+      throw new Error('wiki_admin cannot be deleted');
+    }
+
+    delete data.groups[normalizedName];
+
+    Object.values(data.sections).forEach(section => {
+      section.readGroups = (section.readGroups || []).filter(groupName => groupName !== normalizedName);
+      section.writeGroups = (section.writeGroups || []).filter(groupName => groupName !== normalizedName);
+      section.approverGroups = (section.approverGroups || []).filter(groupName => groupName !== normalizedName);
+    });
+
+    await saveData(data);
   },
 
   async createWikiGroup(name, userId) {

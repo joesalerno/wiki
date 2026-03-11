@@ -1,5 +1,5 @@
 const API_URL = 'http://localhost:3001/graphql';
-const ASSET_URL = 'http://localhost:3001/wiki-assets';
+
 
 const gqlRequest = async (query, variables = {}, userId) => {
   const res = await fetch(API_URL, {
@@ -30,15 +30,6 @@ const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
 });
 
 export const wikiApi = {
-  async getWikiUsers() {
-    const data = await gqlRequest(
-      `query GetWikiUsers {
-        wikiUsers { id name }
-      }`
-    );
-    return data.wikiUsers;
-  },
-
   async getWikiGroups() {
     const data = await gqlRequest(
       `query GetGroups {
@@ -407,24 +398,18 @@ export const wikiApi = {
     const mimeMatch = meta?.match(/^data:(.*);base64$/);
     const mimeType = mimeMatch?.[1] || file.type || 'application/octet-stream';
 
-    const response = await fetch(ASSET_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-ID': getCurrentWikiUserId()
-      },
-      body: JSON.stringify({
-        fileName: file.name,
-        mimeType,
-        contentBase64
-      })
-    });
-
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error || 'Failed to upload asset');
-    }
-
-    return payload;
+    const data = await gqlRequest(
+      `mutation UploadWikiAsset($fileName: String!, $mimeType: String!, $contentBase64: String!) {
+        uploadWikiAsset(fileName: $fileName, mimeType: $mimeType, contentBase64: $contentBase64) {
+          fileName
+          mimeType
+          isImage
+          url
+          markdown
+        }
+      }`,
+      { fileName: file.name, mimeType, contentBase64 }
+    );
+    return data.uploadWikiAsset;
   }
 };

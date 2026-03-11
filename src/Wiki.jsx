@@ -8,44 +8,11 @@ const ADMIN_PERMISSION_GROUP = 'wiki_admin'
 
 const dedupeItems = (values) => [...new Set((values || []).filter(Boolean))]
 
-const getUserGroups = (groups, userId) => Object.values(groups || {})
-  .filter(group => (group.memberIds || []).includes(userId))
-  .map(group => group.name)
-
-const normalizeGroupMap = (groups) => Object.fromEntries(
-  (groups || []).map(group => {
-    const memberIds = (group.users || []).map(user => user.id)
-    return [group.name, { ...group, memberIds }]
-  })
-)
-
-function buildUsersWithMemberships(users, groups) {
-  return (users || []).map(user => {
-    const memberships = getUserGroups(groups, user.id)
-    return {
-      ...user,
-      groups: memberships,
-      isAdmin: memberships.some(groupName => ADMIN_GROUPS.has(groupName))
-    }
-  })
-}
-
 function withRequiredAdminPermission(groups) {
   return dedupeItems([
     ADMIN_PERMISSION_GROUP,
     ...(groups || []).map(groupName => ADMIN_GROUPS.has(groupName) ? ADMIN_PERMISSION_GROUP : groupName)
   ])
-}
-
-function getAdminPermissionMemberNames(groups, users) {
-  const memberIds = new Set(
-    Object.values(groups || {})
-      .filter(group => ADMIN_GROUPS.has(group.name))
-      .flatMap(group => group.memberIds || [])
-  )
-  return users
-    .filter(user => memberIds.has(user.id))
-    .map(user => user.name)
 }
 
 function hasGroupAccess(groupNames, user) {
@@ -65,10 +32,6 @@ function getPermissionSummaryItems(items) {
   return explicitItems.length > 0
     ? withRequiredAdminPermission(explicitItems)
     : []
-}
-
-function formatList(items) {
-  return items && items.length > 0 ? items.join(', ') : 'None'
 }
 
 function formatReadGroups(items) {
@@ -112,19 +75,9 @@ function canApprovePageReview(page, section, user) {
   return hasGroupAccess(approverGroups, user)
 }
 
-function formatPageReviewMode(reviewMode) {
-  if (reviewMode === 'required') return 'Required'
-  if (reviewMode === 'exempt') return 'Exempt'
-  return 'Inherit'
-}
+const formatPageReviewMode = m => m === "required" ? "Required" : m === "exempt" ? "Exempt" : "Inherit"
 
-function getReviewIndicatorClassName(pendingReviewCount, extraClassName = '') {
-  return [
-    'wiki-review-indicator',
-    pendingReviewCount > 0 ? 'is-pending' : 'is-clear',
-    extraClassName
-  ].filter(Boolean).join(' ')
-}
+const getReviewIndicatorClassName = (c, e = "") => ["wiki-review-indicator", c > 0 ? "is-pending" : "is-clear", e].filter(Boolean).join(" ")
 
 function formatReviewIndicatorTitle(page) {
   if ((page?.pendingReviewCount || 0) > 0) {
@@ -138,10 +91,7 @@ function formatReviewIndicatorTitle(page) {
   return 'Reviewed'
 }
 
-function getDraftReviewMode(page, title) {
-  if (page?.reviewMode) return page.reviewMode
-  return title?.trim() === 'Home' ? 'required' : 'inherit'
-}
+const getDraftReviewMode = (p, t) => p?.reviewMode || (t?.trim() === "Home" ? "required" : "inherit")
 
 function createEmptySectionForm() {
   return {
@@ -170,17 +120,12 @@ function toggleSelectedValue(values, value) {
     : [...values, value]
 }
 
-async function getManagementData() {
-  const [loadedUsers, loadedGroups] = await Promise.all([
-    wikiApi.getWikiUsers(),
-    wikiApi.getWikiGroups()
-  ])
-
-  return {
-    users: loadedUsers,
-    groups: normalizeGroupMap(loadedGroups)
-  }
-}
+const normalizeGroupMap = (groups) => Object.fromEntries(
+  (groups || []).map(group => {
+    const memberIds = (group.users || []).map(user => user.id)
+    return [group.name, { ...group, memberIds }]
+  })
+)
 
 function SelectionChips({ items, emptyLabel }) {
   if (!items || items.length === 0) {
@@ -822,83 +767,34 @@ function AdminPanel({ sections, pages, onUpdate, onClose, currentUser }) {
   const [activeTab, setActiveTab] = useState('sections')
   const [editingSectionId, setEditingSectionId] = useState(null)
   const [sectionFormData, setSectionFormData] = useState({})
-  const [editingGroupName, setEditingGroupName] = useState(null)
   const [editingPageTitle, setEditingPageTitle] = useState(null)
   const [pageReviewMode, setPageReviewMode] = useState('inherit')
-  const [groupFormName, setGroupFormName] = useState('wiki_')
-  const [groupMemberIds, setGroupMemberIds] = useState([])
-  const [groupFilter, setGroupFilter] = useState('')
   const [sectionFilter, setSectionFilter] = useState('')
   const [pageFilter, setPageFilter] = useState('')
-  const [userFilter, setUserFilter] = useState('')
   const [permissionGroupFilter, setPermissionGroupFilter] = useState('')
-  const [users, setUsers] = useState([])
   const [groups, setGroups] = useState({})
   const [managementDataError, setManagementDataError] = useState('')
-  const [isManagementDataLoading, setIsManagementDataLoading] = useState(false)
   const canManageSections = Boolean(currentUser?.isAdmin)
-
-  const resetManagementData = () => {
-    setUsers([])
-    setGroups({})
-    setManagementDataError('')
-  }
-
-  const applyManagementData = (managementData) => {
-    setUsers(managementData.users)
-    setGroups(managementData.groups)
-    setManagementDataError('')
-  }
-
-  const loadManagementData = async () => {
-    if (!canManageSections) {
-      resetManagementData()
-      setIsManagementDataLoading(false)
-      return
-    }
-
-    try {
-      setIsManagementDataLoading(true)
-      applyManagementData(await getManagementData())
-    } catch (error) {
-      resetManagementData()
-      setManagementDataError(error.message || 'Failed to load management data')
-    } finally {
-      setIsManagementDataLoading(false)
-    }
-  }
 
   useEffect(() => {
     let isCancelled = false
-    if (!canManageSections) {
-      resetManagementData()
-      setIsManagementDataLoading(false)
-      return undefined
-    }
-    const loadInitialManagementData = async () => {
+    if (!canManageSections) return
+    const loadData = async () => {
       try {
-        setIsManagementDataLoading(true)
-        const managementData = await getManagementData()
+        const loadedGroups = await wikiApi.getWikiGroups()
         if (isCancelled) return
-        applyManagementData(managementData)
+        setGroups(normalizeGroupMap(loadedGroups))
+        setManagementDataError('')
       } catch (error) {
         if (isCancelled) return
-        resetManagementData()
+        setGroups({})
         setManagementDataError(error.message || 'Failed to load management data')
-      } finally {
-        if (!isCancelled) {
-          setIsManagementDataLoading(false)
-        }
       }
     }
-    loadInitialManagementData()
+    loadData()
     return () => { isCancelled = true }
   }, [canManageSections])
 
-  const usersWithGroups = buildUsersWithMemberships(users, groups)
-  const groupOptions = Object.values(groups).sort((left, right) => left.name.localeCompare(right.name))
-  const editableGroupOptions = groupOptions.filter(group => group.name.startsWith('wiki_'))
-  const filteredGroupOptions = editableGroupOptions.filter(group => group.name.toLowerCase().includes(groupFilter.toLowerCase()))
   const filteredSections = Object.values(sections)
     .sort((left, right) => left.title.localeCompare(right.title))
     .filter(section => section.title.toLowerCase().includes(sectionFilter.toLowerCase()))
@@ -906,86 +802,41 @@ function AdminPanel({ sections, pages, onUpdate, onClose, currentUser }) {
     .sort((left, right) => left.title.localeCompare(right.title))
     .filter(page => page.title.toLowerCase().includes(pageFilter.toLowerCase()))
   const homeSectionTitle = Object.values(pages || {}).find(page => page.title === 'Home')?.sectionId || null
-  const filteredUsers = usersWithGroups.filter(user => user.name.toLowerCase().includes(userFilter.toLowerCase()))
-  const filteredPermissionGroups = groupOptions.filter(group => group.name.toLowerCase().includes(permissionGroupFilter.toLowerCase()))
-  const adminPermissionMembers = getAdminPermissionMemberNames(groups, usersWithGroups)
-  const groupUserNames = Object.fromEntries(
-    groupOptions.map(group => [
-      group.name,
-      (group.memberIds || [])
-        .map(memberId => usersWithGroups.find(user => user.id === memberId)?.name || memberId)
-        .join(', ')
-    ])
-  )
-  const isEditingGroup = editingGroupName !== null, isEditingSection = editingSectionId !== null, isEditingPage = editingPageTitle !== null
-  const isEditing = isEditingGroup || isEditingSection || isEditingPage
 
-  const groupChecklistOptions = filteredPermissionGroups.map(group => ({
-    value: group.name,
-    label: group.name,
-    description: groupUserNames[group.name] || 'No members'
-  }))
+  const groupOptions = Object.values(groups).sort((left, right) => left.name.localeCompare(right.name))
+  const filteredPermissionGroups = groupOptions.filter(group => group.name.toLowerCase().includes(permissionGroupFilter.toLowerCase()))
+
+  const isEditingSection = editingSectionId !== null, isEditingPage = editingPageTitle !== null
+  const isEditing = isEditingSection || isEditingPage
+
   const permissionChecklistOptions = [
-    {
-      value: ADMIN_PERMISSION_GROUP,
-      label: ADMIN_PERMISSION_GROUP,
-      description: adminPermissionMembers.length > 0 ? adminPermissionMembers.join(', ') : 'No members',
-      disabled: true
-    },
-    ...groupChecklistOptions.filter(option => !ADMIN_GROUPS.has(option.value))
+    { value: ADMIN_PERMISSION_GROUP, label: ADMIN_PERMISSION_GROUP, disabled: true },
+    ...filteredPermissionGroups
+      .filter(g => !ADMIN_GROUPS.has(g.name))
+      .map(group => ({ value: group.name, label: group.name }))
   ]
-  const userChecklistOptions = filteredUsers.map(user => ({ value: user.id, label: user.name, description: formatList(user.groups || []) }))
 
   const startEditSection = (title, data) => {
     if (!canManageSections) return
     setActiveTab('sections')
-    setEditingGroupName(null)
     setEditingPageTitle(null)
-    setUserFilter('')
     setEditingSectionId(title)
-    if (title === 'new') {
-      setSectionFormData(createEmptySectionForm())
-      setPermissionGroupFilter('')
-      return
-    }
     setPermissionGroupFilter('')
-    setSectionFormData(createSectionFormData(data))
-  }
-
-  const startEditGroup = (name, data) => {
-    if (!canManageSections) return
-    if (name !== 'new' && !name.startsWith('wiki_')) return
-    setActiveTab('groups')
-    setEditingSectionId(null)
-    setEditingPageTitle(null)
-    setPermissionGroupFilter('')
-    setEditingGroupName(name)
-    if (name === 'new') {
-      setGroupFormName('wiki_')
-      setGroupMemberIds([])
-      setUserFilter('')
-      return
-    }
-    setUserFilter('')
-    setGroupFormName(data?.name || name)
-    setGroupMemberIds(data?.memberIds || [])
+    setSectionFormData(title === 'new' ? createEmptySectionForm() : createSectionFormData(data))
   }
 
   const startEditPage = (page) => {
     if (!canManageSections) return
     setActiveTab('pages')
     setEditingSectionId(null)
-    setEditingGroupName(null)
     setEditingPageTitle(page.title)
     setPageReviewMode(page.reviewMode || 'inherit')
   }
 
   const stopEditing = () => {
     setEditingSectionId(null)
-    setEditingGroupName(null)
     setEditingPageTitle(null)
     setPermissionGroupFilter('')
-    setUserFilter('')
   }
 
   const handleSaveSection = async () => {
@@ -1012,37 +863,6 @@ function AdminPanel({ sections, pages, onUpdate, onClose, currentUser }) {
     }
   }
 
-  const handleSaveGroup = async () => {
-    try {
-      const trimmedName = groupFormName.trim()
-      const normalizedName = trimmedName.startsWith('wiki_') ? trimmedName : `wiki_${trimmedName.replace(/^wiki_/, '')}`
-      if (editingGroupName === 'new') {
-        await wikiApi.createWikiGroup(normalizedName, currentUser?.id)
-      }
-      await wikiApi.updateWikiGroup(normalizedName, groupMemberIds, currentUser?.id)
-      await loadManagementData()
-      onUpdate()
-      stopEditing()
-    } catch (error) {
-      alert(error.message)
-    }
-  }
-
-  const handleDeleteGroup = async (name) => {
-    if (name === ADMIN_PERMISSION_GROUP) {
-      alert('wiki_admin cannot be deleted.')
-      return
-    }
-    if (!window.confirm(`Delete ${name}?`)) return
-    try {
-      await wikiApi.deleteWikiGroup(name, currentUser?.id)
-      await loadManagementData()
-      onUpdate()
-    } catch (error) {
-      alert(error.message)
-    }
-  }
-
   const handleSavePage = async () => {
     try {
       await wikiApi.updateWikiPageReviewMode(editingPageTitle, pageReviewMode, currentUser?.id)
@@ -1054,8 +874,7 @@ function AdminPanel({ sections, pages, onUpdate, onClose, currentUser }) {
   }
 
   const renderSectionForm = () => {
-    const initialSectionTitle = editingSectionId === 'new' ? '' : editingSectionId
-    const isSectionTitleChanged = (sectionFormData.title || '') !== initialSectionTitle
+    const isSectionTitleChanged = (sectionFormData.title || '') !== (editingSectionId === 'new' ? '' : editingSectionId)
     return (
       <div className="admin-form">
         <div className="wiki-admin-editor-header">
@@ -1158,69 +977,6 @@ function AdminPanel({ sections, pages, onUpdate, onClose, currentUser }) {
     )
   }
 
-  const renderGroupForm = () => (
-    <div className="admin-form" style={{ marginBottom: '1.5rem' }}>
-      <div className="wiki-admin-editor-header">
-        <div>
-          <h2 className="wiki-admin-editor-title">{editingGroupName === 'new' ? 'New Group' : `Editing ${editingGroupName}`}</h2>
-          <div className="wiki-admin-editor-subtitle">Create or update a wiki group and manage its members in one place.</div>
-        </div>
-      </div>
-      {managementDataError && (
-        <div className="wiki-inline-notice" style={{ marginBottom: '1rem' }}>
-          {managementDataError}
-        </div>
-      )}
-      <div className="wiki-admin-field">
-        <label className="wiki-admin-label">Group Name</label>
-        {editingGroupName === 'new' ? (
-          <div className="wiki-prefixed-input">
-            <span className="wiki-prefixed-input-prefix">wiki_</span>
-            <input
-              type="text"
-              placeholder="group_name"
-              value={groupFormName.replace(/^wiki_/, '')}
-              onChange={e => setGroupFormName(`wiki_${e.target.value.replace(/^wiki_/, '')}`)}
-            />
-          </div>
-        ) : (
-          <input
-            type="text"
-            value={groupFormName}
-            disabled
-            readOnly
-          />
-        )}
-      </div>
-      <div className="wiki-admin-field">
-        <label className="wiki-admin-label">Filter Users</label>
-        <input
-          type="text"
-          className="wiki-search-input wiki-picker-filter"
-          placeholder="Search users by name"
-          value={userFilter}
-          onChange={e => setUserFilter(e.target.value)}
-        />
-      </div>
-      <div className="wiki-admin-field">
-        <label className="wiki-admin-label">Members</label>
-        <FilterableChecklist
-          options={userChecklistOptions}
-          selectedValues={groupMemberIds}
-          onToggle={(value) => setGroupMemberIds(toggleSelectedValue(groupMemberIds, value))}
-          emptyResultsLabel={isManagementDataLoading ? 'Loading users...' : 'No users match this filter.'}
-          selectedSummaryLabel="Selected members"
-          emptySelectionLabel="No members selected"
-          height={220}
-        />
-      </div>
-      <div className="admin-actions" style={{ marginTop: '1rem' }}>
-        <button className="btn btn-sm btn-primary" onClick={handleSaveGroup}>Save</button>
-        <button className="btn btn-sm btn-secondary" onClick={stopEditing}>Close Group Editor</button>
-      </div>
-    </div>
-  )
-
   const renderPageForm = () => {
     const currentPage = pages.find(page => page.title === editingPageTitle)
     const currentSection = currentPage ? sections[currentPage.sectionId] : null
@@ -1264,7 +1020,7 @@ function AdminPanel({ sections, pages, onUpdate, onClose, currentUser }) {
         <button className="btn btn-sm btn-secondary" onClick={onClose}>Close</button>
       </div>
       {!canManageSections && <div className="wiki-inline-notice">
-        Only admin or wiki_admin members can manage groups, sections, and page policies.
+        Only admin or wiki_admin members can manage sections and page policies.
       </div>}
       {canManageSections && managementDataError && <div className="wiki-inline-notice">
         {managementDataError}
@@ -1283,16 +1039,6 @@ function AdminPanel({ sections, pages, onUpdate, onClose, currentUser }) {
         <button
           type="button"
           role="tab"
-          aria-selected={activeTab === 'groups'}
-          className={`wiki-admin-tab ${activeTab === 'groups' ? 'active' : ''}`}
-          onClick={() => !isEditing && setActiveTab('groups')}
-          disabled={isEditing && !isEditingGroup}
-        >
-          Groups
-        </button>
-        <button
-          type="button"
-          role="tab"
           aria-selected={activeTab === 'pages'}
           className={`wiki-admin-tab ${activeTab === 'pages' ? 'active' : ''}`}
           onClick={() => !isEditing && setActiveTab('pages')}
@@ -1302,68 +1048,8 @@ function AdminPanel({ sections, pages, onUpdate, onClose, currentUser }) {
         </button>
       </div>
 
-      {isEditingGroup && renderGroupForm()}
       {isEditingSection && renderSectionForm()}
       {isEditingPage && renderPageForm()}
-
-      {!isEditing && activeTab === 'groups' && <div style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <button className="btn btn-sm btn-primary" onClick={() => startEditGroup('new', {})} disabled={!canManageSections}>
-            + Create Wiki Group
-          </button>
-          <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>
-            Only wiki_ groups can be created or edited here. Section permissions can still use any backend group.
-          </div>
-        </div>
-        <input
-          type="text"
-          placeholder="Filter groups"
-          value={groupFilter}
-          onChange={e => setGroupFilter(e.target.value)}
-          style={{ marginBottom: '1rem', maxWidth: '320px' }}
-        />
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-          <thead>
-            <tr style={{ textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
-              <th style={{ padding: '0.5rem' }}>Group</th>
-              <th style={{ padding: '0.5rem' }}>Members</th>
-              <th style={{ padding: '0.5rem' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredGroupOptions.map(group => <tr key={group.name} style={{ borderBottom: '1px solid #f3f4f6' }}>
-              <td style={{ padding: '0.5rem' }}>{group.name}</td>
-              <td style={{ padding: '0.5rem' }}>{groupUserNames[group.name] || 'No members'}</td>
-              <td style={{ padding: '0.5rem' }}>
-                <button className="btn-text" onClick={() => startEditGroup(group.name, group)} disabled={!canManageSections}>Edit Members</button>
-                {group.name === ADMIN_PERMISSION_GROUP ? (
-                  <span style={{ color: '#9ca3af', marginLeft: '0.5rem', fontSize: '0.85rem' }}>
-                    Protected
-                  </span>
-                ) : (
-                  <button
-                    className="btn-text"
-                    style={{ color: '#9ca3af', marginLeft: '0.5rem', cursor: canManageSections ? 'pointer' : 'not-allowed' }}
-                    onClick={() => canManageSections && handleDeleteGroup(group.name)}
-                    disabled={!canManageSections}
-                  >
-                    Delete
-                  </button>
-                )}
-              </td>
-            </tr>
-            )}
-            {filteredGroupOptions.length === 0 && (
-              <tr>
-                <td colSpan="3" style={{ padding: '0.75rem 0.5rem', color: '#6b7280', fontStyle: 'italic' }}>
-                  No editable wiki_ groups found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      }
 
       {!isEditing && activeTab === 'sections' && (
         <div>
@@ -1492,6 +1178,7 @@ function AdminPanel({ sections, pages, onUpdate, onClose, currentUser }) {
   </div>
 
 }
+
 
 function Sidebar({ pages, sections, currentPageTitle, onSelectPage, onCreatePage, currentUser, onOpenAdmin, canCreatePage, canManageSections }) {
   const [searchTerm, setSearchTerm] = useState('')
