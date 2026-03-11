@@ -397,12 +397,12 @@ export const wikiDataController = {
     return loadData().then(data => getUserById(data, userId));
   },
 
-  async getWikiUsers() {
+  async getUsers() {
     const data = await loadData();
     return [...data.users].sort((left, right) => left.name.localeCompare(right.name));
   },
 
-  async getWikiGroups() {
+  async getGroups() {
     const data = await loadData();
     return Object.values(data.groups).sort((left, right) => left.name.localeCompare(right.name));
   },
@@ -412,7 +412,7 @@ export const wikiDataController = {
     return Object.values(data.sections).sort((left, right) => left.title.localeCompare(right.title));
   },
 
-  async createWikiGroup(name, userId) {
+  async createGroup(name, userId) {
     const data = await loadData();
     await checkAdmin(userId, data);
 
@@ -428,7 +428,7 @@ export const wikiDataController = {
     return data.groups[normalizedName];
   },
 
-  async updateWikiGroup(name, memberIds, userId) {
+  async updateGroup(name, memberIds, userId) {
     const data = await loadData();
     await checkAdmin(userId, data);
 
@@ -444,7 +444,7 @@ export const wikiDataController = {
     return data.groups[normalizedName];
   },
 
-  async deleteWikiGroup(name, userId) {
+  async deleteGroup(name, userId) {
     const data = await loadData();
     await checkAdmin(userId, data);
 

@@ -63,8 +63,8 @@ function App() {
       setIsIdentityLoading(true);
 
       const [loadedUsers, loadedGroups] = await Promise.all([
-        wikiApi.getWikiUsers(),
-        wikiApi.getWikiGroups()
+        wikiApi.getUsers(),
+        wikiApi.getGroups()
       ]);
 
       const groupMap = normalizeGroups(loadedGroups);
